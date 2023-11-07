@@ -1,18 +1,27 @@
 #include "raylib.h"
 #include "raymath.h"
+#include <assert.h>
 
 #include "utils.c"
 
 // #define DRAW_CELL_GRID
 
 const int SCREEN_WIDTH = 1400;
-const int SCREEN_HEIGHT = 1000;
-const int FIELD_COLS = 60;
-const int FIELD_ROWS = 60;
+const int SCREEN_HEIGHT = 900;
+const int FIELD_COLS = 52;
+const int FIELD_ROWS = 52;
 const int CELL_SIZE = 15;
-const int PLAYER1_START_COL = 20;
-const int PLAYER2_START_COL = 36;
-const int PLAYER_SPEED = 100;
+const int SNAP_TO = CELL_SIZE * 2;
+const int TANK_SIZE = CELL_SIZE * 4;
+const int FIELD_MAX_X = FIELD_COLS * CELL_SIZE;
+const int FIELD_MAX_Y = FIELD_ROWS * CELL_SIZE;
+const int PLAYER1_START_COL = 4 * 4;
+const int PLAYER2_START_COL = 4 * 8;
+const int PLAYER_SPEED = 200;
+const int MAX_TANK_COUNT = 100;
+const int MAX_BULLET_COUNT = 200;
+const int BULLET_SPEED = 400;
+const int BULLET_SIZE = 16;
 
 typedef enum { TPlayer1, TPlayer2, TBasic } TankType;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
@@ -25,7 +34,19 @@ typedef struct {
     Vector2 speed;
     Direction direction;
     Texture2D *texture;
+    bool isMoving;
+    char firedBulletCount;
 } Tank;
+
+typedef enum { BTNone, BTPlayer, BTEnemy } BulletType;
+
+typedef struct {
+    Vector2 pos;
+    Vector2 speed;
+    Direction direction;
+    BulletType type;
+    Tank *tank;
+} Bullet;
 
 typedef enum {
     CTBlank,
@@ -42,6 +63,11 @@ typedef struct {
 } Cell;
 
 typedef struct {
+    Texture2D *texture;
+    bool isSolid;
+} CellSpec;
+
+typedef struct {
     Texture2D flag;
     Texture2D brick;
     Texture2D concrete;
@@ -49,22 +75,23 @@ typedef struct {
     Texture2D river;
     Texture2D blank;
     Texture2D player1Tank;
+    Texture2D bullet;
 } Textures;
 
 typedef struct {
     Cell field[FIELD_ROWS][FIELD_COLS];
-    Tank tanks[100];
+    Tank tanks[MAX_TANK_COUNT];
+    Bullet bullets[MAX_BULLET_COUNT];
     Vector2 flagPos;
     int tankCount;
-    Texture2D *cellTextures[CTMax];
+    CellSpec cellSpecs[CTMax];
     Textures textures;
 } Game;
 
 static Game game;
-// static Rectangle textureRectangle = {0, 0, CELL_SIZE * 2, CELL_SIZE * 2};
 
 void drawCell(Cell *cell) {
-    Texture2D *tex = game.cellTextures[cell->type];
+    Texture2D *tex = game.cellSpecs[cell->type].texture;
     DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
                    (Rectangle){cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE},
                    (Vector2){}, 0, WHITE);
@@ -84,10 +111,11 @@ void drawField() {
 void drawTank(Tank *tank) {
     Texture2D *tex = tank->texture;
     float rotation = rotations[tank->direction];
-    DrawTexturePro(
-        *tex, (Rectangle){0, 0, tex->width, tex->height},
-        (Rectangle){tank->pos.x, tank->pos.y, CELL_SIZE * 4, CELL_SIZE * 4},
-        (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}, rotation, WHITE);
+    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
+                   (Rectangle){tank->pos.x + CELL_SIZE * 2,
+                               tank->pos.y + CELL_SIZE * 2, TANK_SIZE,
+                               TANK_SIZE},
+                   (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}, rotation, WHITE);
 }
 
 void drawTanks() {
@@ -98,31 +126,52 @@ void drawTanks() {
 
 void drawFlag() {
     Texture2D *tex = &game.textures.flag;
-    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
-                   (Rectangle){game.flagPos.x, game.flagPos.y, CELL_SIZE * 4,
-                               CELL_SIZE * 4},
-                   (Vector2){}, 0, WHITE);
+    DrawTexturePro(
+        *tex, (Rectangle){0, 0, tex->width, tex->height},
+        (Rectangle){game.flagPos.x, game.flagPos.y, TANK_SIZE, TANK_SIZE},
+        (Vector2){}, 0, WHITE);
+}
+
+void drawBullets() {
+    static int x[4] = {24, 8, 0, 16};
+    Texture2D *tex = &game.textures.bullet;
+    for (int i = 0; i < MAX_BULLET_COUNT; i++) {
+        Bullet *b = &game.bullets[i];
+        if (b->type == BTNone)
+            continue;
+        DrawTexturePro(
+            *tex, (Rectangle){x[b->direction], 0, 8, 8},
+            (Rectangle){b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE},
+            (Vector2){}, 0, WHITE);
+    }
 }
 
 void drawGame() {
     drawField();
     drawTanks();
     drawFlag();
+    drawBullets();
 }
 
 void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
     game.textures.brick = LoadTexture("textures/brick.png");
-    game.cellTextures[CTBrick] = &game.textures.brick;
+    game.cellSpecs[CTBrick] =
+        (CellSpec){.texture = &game.textures.brick, .isSolid = true};
     game.textures.concrete = LoadTexture("textures/concrete.png");
-    game.cellTextures[CTConcrete] = &game.textures.concrete;
+    game.cellSpecs[CTConcrete] =
+        (CellSpec){.texture = &game.textures.concrete, .isSolid = true};
     game.textures.forest = LoadTexture("textures/forest.png");
-    game.cellTextures[CTForest] = &game.textures.forest;
+    game.cellSpecs[CTForest] =
+        (CellSpec){.texture = &game.textures.forest, .isSolid = false};
     game.textures.river = LoadTexture("textures/river.png");
-    game.cellTextures[CTRiver] = &game.textures.river;
+    game.cellSpecs[CTRiver] =
+        (CellSpec){.texture = &game.textures.river, .isSolid = true};
     game.textures.blank = LoadTexture("textures/blank.png");
-    game.cellTextures[CTBlank] = &game.textures.blank;
+    game.cellSpecs[CTBlank] =
+        (CellSpec){.texture = &game.textures.blank, .isSolid = false};
     game.textures.player1Tank = LoadTexture("textures/player1Tank.png");
+    game.textures.bullet = LoadTexture("textures/bullet.png");
 }
 
 void loadField(const char *filename) {
@@ -165,38 +214,231 @@ void initGame() {
     game.tanks[0] = (Tank){.type = TPlayer1,
                            .pos = (Vector2){CELL_SIZE * PLAYER1_START_COL,
                                             CELL_SIZE * (FIELD_ROWS - 4)},
+                           .direction = DUp,
                            .texture = &game.textures.player1Tank};
     game.tankCount = 1;
     game.flagPos = (Vector2){CELL_SIZE * (FIELD_COLS / 2 - 2),
                              CELL_SIZE * (FIELD_ROWS - 4)};
 }
 
+void fireBullet(Tank *t) {
+    if (t->firedBulletCount >= 1)
+        return;
+    t->firedBulletCount++;
+    for (int i = 0; i < MAX_BULLET_COUNT; i++) {
+        Bullet *b = &game.bullets[i];
+        if (b->type != BTNone) {
+            assert(i != MAX_BULLET_COUNT - 1);
+            continue;
+        }
+        b->type = BTPlayer;
+        b->direction = t->direction;
+        b->tank = t;
+        switch (b->direction) {
+        case DRight:
+            b->pos = (Vector2){t->pos.x + TANK_SIZE,
+                               t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
+            b->speed = (Vector2){BULLET_SPEED, 0};
+            break;
+        case DLeft:
+            b->pos = (Vector2){t->pos.x - BULLET_SIZE,
+                               t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
+            b->speed = (Vector2){-BULLET_SPEED, 0};
+            break;
+        case DUp:
+            b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
+                               t->pos.y - BULLET_SIZE};
+            b->speed = (Vector2){0, -BULLET_SPEED};
+            break;
+        case DDown:
+            b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
+                               t->pos.y + TANK_SIZE};
+            b->speed = (Vector2){0, BULLET_SPEED};
+            break;
+        }
+        break;
+    }
+}
+
 void handleInput() {
     Tank *t = &game.tanks[0];
+    if (t->isMoving)
+        return;
     t->speed.x = t->speed.y = 0;
     if (IsKeyDown(KEY_RIGHT)) {
+        t->isMoving = true;
         t->speed.x = PLAYER_SPEED;
         t->direction = DRight;
     } else if (IsKeyDown(KEY_LEFT)) {
+        t->isMoving = true;
         t->speed.x = -PLAYER_SPEED;
         t->direction = DLeft;
     } else if (IsKeyDown(KEY_UP)) {
+        t->isMoving = true;
         t->speed.y = -PLAYER_SPEED;
         t->direction = DUp;
     } else if (IsKeyDown(KEY_DOWN)) {
+        t->isMoving = true;
         t->speed.y = PLAYER_SPEED;
         t->direction = DDown;
+    }
+    if (IsKeyDown(KEY_SPACE)) {
+        fireBullet(t);
+    }
+}
+
+void checkCollision(Tank *tank) {
+    switch (tank->direction) {
+    case DRight: {
+        if (tank->pos.x + TANK_SIZE >= FIELD_MAX_X) {
+            tank->isMoving = false;
+            tank->pos.x = FIELD_MAX_X - TANK_SIZE;
+            return;
+        }
+        int startRow = ((int)tank->pos.y) / CELL_SIZE;
+        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+        int col = ((int)tank->pos.x) / CELL_SIZE + 4;
+        for (int r = startRow; r <= endRow; r++) {
+            CellType cellType = game.field[r][col].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                tank->isMoving = false;
+                tank->pos.x = game.field[r][col].pos.x - TANK_SIZE;
+            }
+        }
+        return;
+    }
+    case DLeft: {
+        if (tank->pos.x <= 0) {
+            tank->isMoving = false;
+            tank->pos.x = 0;
+            return;
+        }
+        int startRow = ((int)tank->pos.y) / CELL_SIZE;
+        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+        int col = ((int)tank->pos.x) / CELL_SIZE;
+        for (int r = startRow; r <= endRow; r++) {
+            CellType cellType = game.field[r][col].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                tank->isMoving = false;
+                tank->pos.x = game.field[r][col].pos.x + CELL_SIZE;
+            }
+        }
+        return;
+    }
+    case DUp: {
+        if (tank->pos.y <= 0) {
+            tank->isMoving = false;
+            tank->pos.y = 0;
+            return;
+        }
+        int startCol = ((int)tank->pos.x) / CELL_SIZE;
+        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+        int row = ((int)(tank->pos.y)) / CELL_SIZE;
+        for (int c = startCol; c <= endCol; c++) {
+            CellType cellType = game.field[row][c].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                tank->isMoving = false;
+                tank->pos.y = game.field[row][c].pos.y + CELL_SIZE;
+            }
+        }
+        return;
+    }
+    case DDown: {
+        if (tank->pos.y + TANK_SIZE >= FIELD_MAX_Y) {
+            tank->isMoving = false;
+            tank->pos.y = FIELD_MAX_Y - TANK_SIZE;
+            return;
+        }
+        int startCol = ((int)tank->pos.x) / CELL_SIZE;
+        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+        int row = ((int)tank->pos.y) / CELL_SIZE + 4;
+        for (int c = startCol; c <= endCol; c++) {
+            CellType cellType = game.field[row][c].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                tank->isMoving = false;
+                tank->pos.y = game.field[row][c].pos.y - TANK_SIZE;
+            }
+        }
+        return;
+    }
+    }
+}
+
+void updateTankState(float time, Tank *t) {
+    if (!t->isMoving)
+        return;
+    switch (t->direction) {
+    case DLeft: {
+        int toSnap = ((int)t->pos.x) % SNAP_TO;
+        int toMove = time * -t->speed.x;
+        if (toSnap && toSnap <= toMove) {
+            t->pos.x -= toSnap;
+            t->isMoving = false;
+        } else {
+            t->pos.x -= toMove;
+        }
+        break;
+    }
+    case DRight: {
+        int toSnap = SNAP_TO - ((int)t->pos.x) % SNAP_TO;
+        int toMove = time * t->speed.x;
+        if (toSnap <= toMove) {
+            t->pos.x += toSnap;
+            t->isMoving = false;
+        } else {
+            t->pos.x += toMove;
+        }
+        break;
+    }
+    case DUp: {
+        int toSnap = ((int)t->pos.y) % SNAP_TO;
+        int toMove = time * -t->speed.y;
+        if (toSnap && toSnap <= toMove) {
+            t->pos.y -= toSnap;
+            t->isMoving = false;
+        } else {
+            t->pos.y -= toMove;
+        }
+        break;
+    }
+    case DDown: {
+        int toSnap = SNAP_TO - ((int)t->pos.y) % SNAP_TO;
+        int toMove = time * t->speed.y;
+        if (toSnap <= toMove) {
+            t->pos.y += toSnap;
+            t->isMoving = false;
+        } else {
+            t->pos.y += toMove;
+        }
+        break;
+    }
+    }
+    checkCollision(&game.tanks[0]);
+}
+
+void updateBulletsState(float time) {
+    for (int i = 0; i < MAX_BULLET_COUNT; i++) {
+        Bullet *b = &game.bullets[i];
+        if (b->type == BTNone)
+            continue;
+        b->pos.x += (b->speed.x * time);
+        b->pos.y += (b->speed.y * time);
+        if (b->pos.x <= 0 || b->pos.x + BULLET_SIZE >= FIELD_MAX_X ||
+            b->pos.y <= 0 || b->pos.y + BULLET_SIZE >= FIELD_MAX_Y) {
+            b->type = BTNone;
+            b->tank->firedBulletCount--;
+        }
     }
 }
 
 void updateGameState(float time) {
-    game.tanks[0].pos.x += time * game.tanks[0].speed.x;
-    game.tanks[0].pos.y += time * game.tanks[0].speed.y;
+    updateBulletsState(time);
+    updateTankState(time, &game.tanks[0]);
 }
 
 int main(void) {
 
-    SetTraceLogLevel(LOG_NONE);
+    // SetTraceLogLevel(LOG_NONE);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
 
     initGame();
