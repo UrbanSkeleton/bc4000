@@ -10,14 +10,14 @@ const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
 const int FIELD_COLS = 52;
 const int FIELD_ROWS = 52;
-const int CELL_SIZE = 15;
+const int CELL_SIZE = 16;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int FIELD_MAX_X = FIELD_COLS * CELL_SIZE;
 const int FIELD_MAX_Y = FIELD_ROWS * CELL_SIZE;
 const int PLAYER1_START_COL = 4 * 4;
 const int PLAYER2_START_COL = 4 * 8;
-const int PLAYER_SPEED = 200;
+const int PLAYER_SPEED = 300;
 const int MAX_TANK_COUNT = 100;
 const int MAX_BULLET_COUNT = 200;
 const int BULLET_SPEED = 400;
@@ -60,6 +60,8 @@ typedef enum {
 typedef struct {
     CellType type;
     Vector2 pos;
+    char texRow;
+    char texCol;
 } Cell;
 
 typedef struct {
@@ -92,7 +94,9 @@ static Game game;
 
 void drawCell(Cell *cell) {
     Texture2D *tex = game.cellSpecs[cell->type].texture;
-    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
+    int w = tex->width / 4;
+    int h = tex->height / 4;
+    DrawTexturePro(*tex, (Rectangle){cell->texCol * w, cell->texRow * h, w, h},
                    (Rectangle){cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE},
                    (Vector2){}, 0, WHITE);
 #ifdef DRAW_CELL_GRID
@@ -179,6 +183,8 @@ void loadField(const char *filename) {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             int index = (i / 4) * (FIELD_COLS / 4 + 1) + (j / 4);
+            game.field[i][j].texRow = i % 4;
+            game.field[i][j].texCol = j % 4;
             switch (buf.bytes[index]) {
             case 'b':
                 game.field[i][j].type = CTBrick;
@@ -287,7 +293,84 @@ void handleInput() {
     }
 }
 
-void checkCollision(Tank *tank) {
+static void destroyBullet(Bullet *b) {
+    b->type = BTNone;
+    b->tank->firedBulletCount--;
+}
+
+void checkBulletCollision(Bullet *b) {
+    switch (b->direction) {
+    case DRight: {
+        if (b->pos.x + BULLET_SIZE >= FIELD_MAX_X) {
+            destroyBullet(b);
+            return;
+        }
+        int startRow = ((int)b->pos.y) / CELL_SIZE;
+        int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
+        int col = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
+        for (int r = startRow; r <= endRow; r++) {
+            CellType cellType = game.field[r][col].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                destroyBullet(b);
+                return;
+            }
+        }
+        return;
+    }
+    case DLeft: {
+        if (b->pos.x <= 0) {
+            destroyBullet(b);
+            return;
+        }
+        int startRow = ((int)b->pos.y) / CELL_SIZE;
+        int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
+        int col = ((int)b->pos.x) / CELL_SIZE;
+        for (int r = startRow; r <= endRow; r++) {
+            CellType cellType = game.field[r][col].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                destroyBullet(b);
+                return;
+            }
+        }
+        return;
+    }
+    case DUp: {
+        if (b->pos.y <= 0) {
+            destroyBullet(b);
+            return;
+        }
+        int startCol = ((int)b->pos.x) / CELL_SIZE;
+        int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
+        int row = ((int)(b->pos.y)) / CELL_SIZE;
+        for (int c = startCol; c <= endCol; c++) {
+            CellType cellType = game.field[row][c].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                destroyBullet(b);
+                return;
+            }
+        }
+        return;
+    }
+    case DDown: {
+        if (b->pos.y + BULLET_SIZE >= FIELD_MAX_Y) {
+            destroyBullet(b);
+            return;
+        }
+        int startCol = ((int)b->pos.x) / CELL_SIZE;
+        int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
+        int row = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
+        for (int c = startCol; c <= endCol; c++) {
+            CellType cellType = game.field[row][c].type;
+            if (game.cellSpecs[cellType].isSolid) {
+                destroyBullet(b);
+                return;
+            }
+        }
+        return;
+    }
+    }
+}
+void checkTankCollision(Tank *tank) {
     switch (tank->direction) {
     case DRight: {
         if (tank->pos.x + TANK_SIZE >= FIELD_MAX_X) {
@@ -297,7 +380,7 @@ void checkCollision(Tank *tank) {
         }
         int startRow = ((int)tank->pos.y) / CELL_SIZE;
         int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
-        int col = ((int)tank->pos.x) / CELL_SIZE + 4;
+        int col = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
         for (int r = startRow; r <= endRow; r++) {
             CellType cellType = game.field[r][col].type;
             if (game.cellSpecs[cellType].isSolid) {
@@ -351,7 +434,7 @@ void checkCollision(Tank *tank) {
         }
         int startCol = ((int)tank->pos.x) / CELL_SIZE;
         int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
-        int row = ((int)tank->pos.y) / CELL_SIZE + 4;
+        int row = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
         for (int c = startCol; c <= endCol; c++) {
             CellType cellType = game.field[row][c].type;
             if (game.cellSpecs[cellType].isSolid) {
@@ -413,7 +496,7 @@ void updateTankState(float time, Tank *t) {
         break;
     }
     }
-    checkCollision(&game.tanks[0]);
+    checkTankCollision(&game.tanks[0]);
 }
 
 void updateBulletsState(float time) {
@@ -423,11 +506,7 @@ void updateBulletsState(float time) {
             continue;
         b->pos.x += (b->speed.x * time);
         b->pos.y += (b->speed.y * time);
-        if (b->pos.x <= 0 || b->pos.x + BULLET_SIZE >= FIELD_MAX_X ||
-            b->pos.y <= 0 || b->pos.y + BULLET_SIZE >= FIELD_MAX_Y) {
-            b->type = BTNone;
-            b->tank->firedBulletCount--;
-        }
+        checkBulletCollision(b);
     }
 }
 
@@ -438,7 +517,7 @@ void updateGameState(float time) {
 
 int main(void) {
 
-    // SetTraceLogLevel(LOG_NONE);
+    SetTraceLogLevel(LOG_NONE);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
 
     initGame();
