@@ -6,6 +6,8 @@
 
 // #define DRAW_CELL_GRID
 
+#define ASIZE(a) (sizeof(a) / sizeof(a[0]))
+
 const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
 const int FIELD_COLS = 52;
@@ -20,8 +22,11 @@ const int PLAYER2_START_COL = 4 * 8;
 const int PLAYER_SPEED = 300;
 const int MAX_TANK_COUNT = 100;
 const int MAX_BULLET_COUNT = 200;
+const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
 const int BULLET_SPEED = 400;
 const int BULLET_SIZE = 16;
+const int EXPLOSION_SIZE = 64;
+const float BULLET_EXPLOSION_TTL = 0.2f;
 
 typedef enum { TPlayer1, TPlayer2, TBasic } TankType;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
@@ -37,6 +42,11 @@ typedef struct {
     bool isMoving;
     char firedBulletCount;
 } Tank;
+
+typedef struct {
+    Vector2 pos;
+    float ttl;
+} Explosion;
 
 typedef enum { BTNone, BTPlayer, BTEnemy } BulletType;
 
@@ -78,6 +88,7 @@ typedef struct {
     Texture2D blank;
     Texture2D player1Tank;
     Texture2D bullet;
+    Texture2D bulletExplosions[3];
 } Textures;
 
 typedef struct {
@@ -87,6 +98,7 @@ typedef struct {
     Vector2 flagPos;
     int tankCount;
     CellSpec cellSpecs[CTMax];
+    Explosion explosions[MAX_EXPLOSION_COUNT];
     Textures textures;
 } Game;
 
@@ -150,11 +162,29 @@ void drawBullets() {
     }
 }
 
+void drawExplosions() {
+    for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
+        Explosion *e = &game.explosions[i];
+        if (e->ttl <= 0)
+            continue;
+        int texCount = ASIZE(game.textures.bulletExplosions);
+        int index = e->ttl / (BULLET_EXPLOSION_TTL / texCount);
+        if (index >= texCount)
+            index = texCount - 1;
+        Texture2D *tex = &game.textures.bulletExplosions[texCount - index - 1];
+        DrawTexturePro(
+            *tex, (Rectangle){0, 0, tex->width, tex->height},
+            (Rectangle){e->pos.x, e->pos.y, EXPLOSION_SIZE, EXPLOSION_SIZE},
+            (Vector2){}, 0, WHITE);
+    }
+}
+
 void drawGame() {
     drawField();
     drawTanks();
     drawFlag();
     drawBullets();
+    drawExplosions();
 }
 
 void loadTextures() {
@@ -176,6 +206,12 @@ void loadTextures() {
         (CellSpec){.texture = &game.textures.blank, .isSolid = false};
     game.textures.player1Tank = LoadTexture("textures/player1Tank.png");
     game.textures.bullet = LoadTexture("textures/bullet.png");
+    game.textures.bulletExplosions[0] =
+        LoadTexture("textures/bullet_explosion_1.png");
+    game.textures.bulletExplosions[1] =
+        LoadTexture("textures/bullet_explosion_2.png");
+    game.textures.bulletExplosions[2] =
+        LoadTexture("textures/bullet_explosion_3.png");
 }
 
 void loadField(const char *filename) {
@@ -296,6 +332,16 @@ void handleInput() {
 static void destroyBullet(Bullet *b) {
     b->type = BTNone;
     b->tank->firedBulletCount--;
+    int offset = (EXPLOSION_SIZE - BULLET_SIZE) / 2;
+    for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
+        if (game.explosions[i].ttl <= 0) {
+            game.explosions[i].ttl = BULLET_EXPLOSION_TTL;
+
+            game.explosions[i].pos =
+                (Vector2){b->pos.x - offset, b->pos.y - offset};
+            break;
+        }
+    }
 }
 
 void checkBulletCollision(Bullet *b) {
@@ -510,7 +556,16 @@ void updateBulletsState(float time) {
     }
 }
 
+void updateExplosionsState(float time) {
+    for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
+        if (game.explosions[i].ttl > 0) {
+            game.explosions[i].ttl -= time;
+        }
+    }
+}
+
 void updateGameState(float time) {
+    updateExplosionsState(time);
     updateBulletsState(time);
     updateTankState(time, &game.tanks[0]);
 }
