@@ -15,6 +15,7 @@ const int FIELD_ROWS = 52;
 const int CELL_SIZE = 16;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
+const int TANK_TEXTURE_SIZE = 28;
 const int FIELD_MAX_X = FIELD_COLS * CELL_SIZE;
 const int FIELD_MAX_Y = FIELD_ROWS * CELL_SIZE;
 const int PLAYER1_START_COL = 4 * 4;
@@ -30,8 +31,6 @@ const float BULLET_EXPLOSION_TTL = 0.2f;
 
 typedef enum { TPlayer1, TPlayer2, TBasic } TankType;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
-
-Direction rotations[4] = {270, 90, 0, 180};
 
 typedef struct {
     TankType type;
@@ -88,6 +87,7 @@ typedef struct {
     Texture2D river;
     Texture2D blank;
     Texture2D player1Tank;
+    Texture2D player2Tank;
     Texture2D bullet;
     Texture2D bulletExplosions[3];
 } Textures;
@@ -126,13 +126,17 @@ void drawField() {
 }
 
 void drawTank(Tank *tank) {
+    static char textureRows[4] = {3, 1, 0, 2};
     Texture2D *tex = tank->texture;
-    float rotation = rotations[tank->direction];
-    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
-                   (Rectangle){tank->pos.x + CELL_SIZE * 2,
-                               tank->pos.y + CELL_SIZE * 2, TANK_SIZE,
-                               TANK_SIZE},
-                   (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}, rotation, WHITE);
+    int texX = 0;
+    int texY = textureRows[tank->direction] * TANK_TEXTURE_SIZE;
+    int drawSize = TANK_TEXTURE_SIZE * 2;
+    int drawOffset = (TANK_SIZE - drawSize) / 2;
+    DrawTexturePro(
+        *tex, (Rectangle){texX, texY, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
+        (Rectangle){tank->pos.x + drawOffset, tank->pos.y + drawOffset,
+                    drawSize, drawSize},
+        (Vector2){}, 0, WHITE);
 }
 
 void drawTanks() {
@@ -205,7 +209,8 @@ void loadTextures() {
     game.textures.blank = LoadTexture("textures/blank.png");
     game.cellSpecs[CTBlank] =
         (CellSpec){.texture = &game.textures.blank, .isSolid = false};
-    game.textures.player1Tank = LoadTexture("textures/player1Tank.png");
+    game.textures.player1Tank = LoadTexture("textures/tank1.png");
+    game.textures.player2Tank = LoadTexture("textures/tank2.png");
     game.textures.bullet = LoadTexture("textures/bullet.png");
     game.textures.bulletExplosions[0] =
         LoadTexture("textures/bullet_explosion_1.png");
