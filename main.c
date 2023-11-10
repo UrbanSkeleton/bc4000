@@ -41,6 +41,7 @@ typedef struct {
     Texture2D *texture;
     bool isMoving;
     char firedBulletCount;
+    bool isFiring;
 } Tank;
 
 typedef struct {
@@ -181,9 +182,9 @@ void drawExplosions() {
 
 void drawGame() {
     drawField();
+    drawBullets();
     drawTanks();
     drawFlag();
-    drawBullets();
     drawExplosions();
 }
 
@@ -263,10 +264,16 @@ void initGame() {
                              CELL_SIZE * (FIELD_ROWS - 4)};
 }
 
+static void finishFire(Tank *t) {
+    if (!t->firedBulletCount)
+        t->isFiring = false;
+}
+
 void fireBullet(Tank *t) {
-    if (t->firedBulletCount >= 1)
+    if (t->firedBulletCount >= 1 || t->isFiring)
         return;
     t->firedBulletCount++;
+    t->isFiring = true;
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
         if (b->type != BTNone) {
@@ -278,23 +285,23 @@ void fireBullet(Tank *t) {
         b->tank = t;
         switch (b->direction) {
         case DRight:
-            b->pos = (Vector2){t->pos.x + TANK_SIZE,
+            b->pos = (Vector2){t->pos.x + TANK_SIZE - BULLET_SIZE,
                                t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
             b->speed = (Vector2){BULLET_SPEED, 0};
             break;
         case DLeft:
-            b->pos = (Vector2){t->pos.x - BULLET_SIZE,
-                               t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
+            b->pos =
+                (Vector2){t->pos.x, t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
             b->speed = (Vector2){-BULLET_SPEED, 0};
             break;
         case DUp:
-            b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
-                               t->pos.y - BULLET_SIZE};
+            b->pos =
+                (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2, t->pos.y};
             b->speed = (Vector2){0, -BULLET_SPEED};
             break;
         case DDown:
             b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
-                               t->pos.y + TANK_SIZE};
+                               t->pos.y + TANK_SIZE - BULLET_SIZE};
             b->speed = (Vector2){0, BULLET_SPEED};
             break;
         }
@@ -324,8 +331,10 @@ void handleInput() {
         t->speed.y = PLAYER_SPEED;
         t->direction = DDown;
     }
-    if (IsKeyDown(KEY_SPACE)) {
+    if (IsKeyDown(KEY_Z)) {
         fireBullet(t);
+    } else {
+        finishFire(t);
     }
 }
 
@@ -344,6 +353,37 @@ static void destroyBullet(Bullet *b) {
     }
 }
 
+static void destroyBrick(int row, int col) {
+    if (row < 0 || row >= FIELD_ROWS || col < 0 || col >= FIELD_COLS)
+        return;
+    if (game.field[row][col].type == CTBrick)
+        game.field[row][col].type = CTBlank;
+}
+
+static void checkBulletRows(Bullet *b, int startRow, int endRow, int col) {
+    for (int r = startRow; r <= endRow; r++) {
+        CellType cellType = game.field[r][col].type;
+        if (game.cellSpecs[cellType].isSolid) {
+            destroyBullet(b);
+            for (int rr = startRow - 1; rr <= endRow + 1; rr++)
+                destroyBrick(rr, col);
+            return;
+        }
+    }
+}
+
+static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
+    for (int c = startCol; c <= endCol; c++) {
+        CellType cellType = game.field[row][c].type;
+        if (game.cellSpecs[cellType].isSolid) {
+            destroyBullet(b);
+            for (int cc = startCol - 1; cc <= endCol + 1; cc++)
+                destroyBrick(row, cc);
+            return;
+        }
+    }
+}
+
 void checkBulletCollision(Bullet *b) {
     switch (b->direction) {
     case DRight: {
@@ -354,13 +394,7 @@ void checkBulletCollision(Bullet *b) {
         int startRow = ((int)b->pos.y) / CELL_SIZE;
         int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
         int col = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
-        for (int r = startRow; r <= endRow; r++) {
-            CellType cellType = game.field[r][col].type;
-            if (game.cellSpecs[cellType].isSolid) {
-                destroyBullet(b);
-                return;
-            }
-        }
+        checkBulletRows(b, startRow, endRow, col);
         return;
     }
     case DLeft: {
@@ -371,13 +405,7 @@ void checkBulletCollision(Bullet *b) {
         int startRow = ((int)b->pos.y) / CELL_SIZE;
         int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
         int col = ((int)b->pos.x) / CELL_SIZE;
-        for (int r = startRow; r <= endRow; r++) {
-            CellType cellType = game.field[r][col].type;
-            if (game.cellSpecs[cellType].isSolid) {
-                destroyBullet(b);
-                return;
-            }
-        }
+        checkBulletRows(b, startRow, endRow, col);
         return;
     }
     case DUp: {
@@ -388,13 +416,7 @@ void checkBulletCollision(Bullet *b) {
         int startCol = ((int)b->pos.x) / CELL_SIZE;
         int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
         int row = ((int)(b->pos.y)) / CELL_SIZE;
-        for (int c = startCol; c <= endCol; c++) {
-            CellType cellType = game.field[row][c].type;
-            if (game.cellSpecs[cellType].isSolid) {
-                destroyBullet(b);
-                return;
-            }
-        }
+        checkBulletCols(b, startCol, endCol, row);
         return;
     }
     case DDown: {
@@ -405,17 +427,12 @@ void checkBulletCollision(Bullet *b) {
         int startCol = ((int)b->pos.x) / CELL_SIZE;
         int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
         int row = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
-        for (int c = startCol; c <= endCol; c++) {
-            CellType cellType = game.field[row][c].type;
-            if (game.cellSpecs[cellType].isSolid) {
-                destroyBullet(b);
-                return;
-            }
-        }
+        checkBulletCols(b, startCol, endCol, row);
         return;
     }
     }
 }
+
 void checkTankCollision(Tank *tank) {
     switch (tank->direction) {
     case DRight: {
