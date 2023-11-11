@@ -77,6 +77,7 @@ typedef struct {
 typedef struct {
     Texture2D *texture;
     bool isSolid;
+    bool isPassable;
 } CellSpec;
 
 typedef struct {
@@ -120,7 +121,17 @@ void drawCell(Cell *cell) {
 void drawField() {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            drawCell(&game.field[i][j]);
+            if (game.field[i][j].type != CTForest)
+                drawCell(&game.field[i][j]);
+        }
+    }
+}
+
+void drawForest() {
+    for (int i = 0; i < FIELD_ROWS; i++) {
+        for (int j = 0; j < FIELD_COLS; j++) {
+            if (game.field[i][j].type == CTForest)
+                drawCell(&game.field[i][j]);
         }
     }
 }
@@ -189,6 +200,7 @@ void drawGame() {
     drawBullets();
     drawTanks();
     drawFlag();
+    drawForest();
     drawExplosions();
 }
 
@@ -202,13 +214,12 @@ void loadTextures() {
         (CellSpec){.texture = &game.textures.concrete, .isSolid = true};
     game.textures.forest = LoadTexture("textures/forest.png");
     game.cellSpecs[CTForest] =
-        (CellSpec){.texture = &game.textures.forest, .isSolid = false};
+        (CellSpec){.texture = &game.textures.forest, .isPassable = true};
     game.textures.river = LoadTexture("textures/river.png");
-    game.cellSpecs[CTRiver] =
-        (CellSpec){.texture = &game.textures.river, .isSolid = true};
+    game.cellSpecs[CTRiver] = (CellSpec){.texture = &game.textures.river};
     game.textures.blank = LoadTexture("textures/blank.png");
     game.cellSpecs[CTBlank] =
-        (CellSpec){.texture = &game.textures.blank, .isSolid = false};
+        (CellSpec){.texture = &game.textures.blank, .isPassable = true};
     game.textures.player1Tank = LoadTexture("textures/tank1.png");
     game.textures.player2Tank = LoadTexture("textures/tank2.png");
     game.textures.bullet = LoadTexture("textures/bullet.png");
@@ -451,7 +462,7 @@ void checkTankCollision(Tank *tank) {
         int col = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
         for (int r = startRow; r <= endRow; r++) {
             CellType cellType = game.field[r][col].type;
-            if (game.cellSpecs[cellType].isSolid) {
+            if (!game.cellSpecs[cellType].isPassable) {
                 tank->isMoving = false;
                 tank->pos.x = game.field[r][col].pos.x - TANK_SIZE;
             }
@@ -469,7 +480,7 @@ void checkTankCollision(Tank *tank) {
         int col = ((int)tank->pos.x) / CELL_SIZE;
         for (int r = startRow; r <= endRow; r++) {
             CellType cellType = game.field[r][col].type;
-            if (game.cellSpecs[cellType].isSolid) {
+            if (!game.cellSpecs[cellType].isPassable) {
                 tank->isMoving = false;
                 tank->pos.x = game.field[r][col].pos.x + CELL_SIZE;
             }
@@ -487,7 +498,7 @@ void checkTankCollision(Tank *tank) {
         int row = ((int)(tank->pos.y)) / CELL_SIZE;
         for (int c = startCol; c <= endCol; c++) {
             CellType cellType = game.field[row][c].type;
-            if (game.cellSpecs[cellType].isSolid) {
+            if (!game.cellSpecs[cellType].isPassable) {
                 tank->isMoving = false;
                 tank->pos.y = game.field[row][c].pos.y + CELL_SIZE;
             }
@@ -505,7 +516,7 @@ void checkTankCollision(Tank *tank) {
         int row = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
         for (int c = startCol; c <= endCol; c++) {
             CellType cellType = game.field[row][c].type;
-            if (game.cellSpecs[cellType].isSolid) {
+            if (!game.cellSpecs[cellType].isPassable) {
                 tank->isMoving = false;
                 tank->pos.y = game.field[row][c].pos.y - TANK_SIZE;
             }
