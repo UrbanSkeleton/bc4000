@@ -10,16 +10,14 @@
 
 const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
-const int FIELD_COLS = 52;
-const int FIELD_ROWS = 52;
+const int FIELD_COLS = 64;
+const int FIELD_ROWS = 56;
 const int CELL_SIZE = 16;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int TANK_TEXTURE_SIZE = 28;
-const int FIELD_MAX_X = FIELD_COLS * CELL_SIZE;
-const int FIELD_MAX_Y = FIELD_ROWS * CELL_SIZE;
-const int PLAYER1_START_COL = 4 * 4;
-const int PLAYER2_START_COL = 4 * 8;
+const int PLAYER1_START_COL = 4 * 4 + 4;
+const int PLAYER2_START_COL = 4 * 8 + 4;
 const int PLAYER_SPEED = 300;
 const int MAX_TANK_COUNT = 100;
 const int MAX_BULLET_COUNT = 200;
@@ -59,6 +57,7 @@ typedef struct {
 } Bullet;
 
 typedef enum {
+    CTBorder,
     CTBlank,
     CTBrick,
     CTConcrete,
@@ -83,6 +82,7 @@ typedef struct {
 typedef struct {
     Texture2D flag;
     Texture2D brick;
+    Texture2D border;
     Texture2D concrete;
     Texture2D forest;
     Texture2D river;
@@ -206,6 +206,9 @@ void drawGame() {
 
 void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.border = LoadTexture("textures/border.png");
+    game.cellSpecs[CTBorder] =
+        (CellSpec){.texture = &game.textures.border, .isSolid = true};
     game.textures.brick = LoadTexture("textures/brick.png");
     game.cellSpecs[CTBrick] =
         (CellSpec){.texture = &game.textures.brick, .isSolid = true};
@@ -235,9 +238,15 @@ void loadField(const char *filename) {
     Buffer buf = readFile("levels/1.level");
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            int index = (i / 4) * (FIELD_COLS / 4 + 1) + (j / 4);
-            game.field[i][j].texRow = i % 4;
+            game.field[i][j].texRow = i - 2 % 4;
             game.field[i][j].texCol = j % 4;
+            if (i <= 1 || i >= FIELD_ROWS - 2 || j <= 3 ||
+                j >= FIELD_COLS - 8) {
+                game.field[i][j].type = CTBorder;
+                continue;
+            }
+            int index =
+                ((i - 2) / 4) * ((FIELD_COLS - 12) / 4 + 1) + ((j - 4) / 4);
             switch (buf.bytes[index]) {
             case 'b':
                 game.field[i][j].type = CTBrick;
@@ -255,7 +264,6 @@ void loadField(const char *filename) {
                 game.field[i][j].type = CTBlank;
                 break;
             }
-            index++;
         }
     }
 }
@@ -272,12 +280,12 @@ void initGame() {
     loadField("levels/1.level");
     game.tanks[0] = (Tank){.type = TPlayer1,
                            .pos = (Vector2){CELL_SIZE * PLAYER1_START_COL,
-                                            CELL_SIZE * (FIELD_ROWS - 4)},
+                                            CELL_SIZE * (FIELD_ROWS - 4 - 2)},
                            .direction = DUp,
                            .texture = &game.textures.player1Tank};
     game.tankCount = 1;
-    game.flagPos = (Vector2){CELL_SIZE * (FIELD_COLS / 2 - 2),
-                             CELL_SIZE * (FIELD_ROWS - 4)};
+    game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
+                             CELL_SIZE * (FIELD_ROWS - 4 - 2)};
 }
 
 static void finishFire(Tank *t) {
@@ -403,10 +411,6 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
 void checkBulletCollision(Bullet *b) {
     switch (b->direction) {
     case DRight: {
-        if (b->pos.x + BULLET_SIZE >= FIELD_MAX_X) {
-            destroyBullet(b);
-            return;
-        }
         int startRow = ((int)b->pos.y) / CELL_SIZE;
         int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
         int col = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
@@ -414,10 +418,6 @@ void checkBulletCollision(Bullet *b) {
         return;
     }
     case DLeft: {
-        if (b->pos.x <= 0) {
-            destroyBullet(b);
-            return;
-        }
         int startRow = ((int)b->pos.y) / CELL_SIZE;
         int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
         int col = ((int)b->pos.x) / CELL_SIZE;
@@ -425,10 +425,6 @@ void checkBulletCollision(Bullet *b) {
         return;
     }
     case DUp: {
-        if (b->pos.y <= 0) {
-            destroyBullet(b);
-            return;
-        }
         int startCol = ((int)b->pos.x) / CELL_SIZE;
         int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
         int row = ((int)(b->pos.y)) / CELL_SIZE;
@@ -436,10 +432,6 @@ void checkBulletCollision(Bullet *b) {
         return;
     }
     case DDown: {
-        if (b->pos.y + BULLET_SIZE >= FIELD_MAX_Y) {
-            destroyBullet(b);
-            return;
-        }
         int startCol = ((int)b->pos.x) / CELL_SIZE;
         int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
         int row = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
@@ -452,11 +444,6 @@ void checkBulletCollision(Bullet *b) {
 void checkTankCollision(Tank *tank) {
     switch (tank->direction) {
     case DRight: {
-        if (tank->pos.x + TANK_SIZE >= FIELD_MAX_X) {
-            tank->isMoving = false;
-            tank->pos.x = FIELD_MAX_X - TANK_SIZE;
-            return;
-        }
         int startRow = ((int)tank->pos.y) / CELL_SIZE;
         int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
         int col = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
@@ -470,11 +457,6 @@ void checkTankCollision(Tank *tank) {
         return;
     }
     case DLeft: {
-        if (tank->pos.x <= 0) {
-            tank->isMoving = false;
-            tank->pos.x = 0;
-            return;
-        }
         int startRow = ((int)tank->pos.y) / CELL_SIZE;
         int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
         int col = ((int)tank->pos.x) / CELL_SIZE;
@@ -488,11 +470,6 @@ void checkTankCollision(Tank *tank) {
         return;
     }
     case DUp: {
-        if (tank->pos.y <= 0) {
-            tank->isMoving = false;
-            tank->pos.y = 0;
-            return;
-        }
         int startCol = ((int)tank->pos.x) / CELL_SIZE;
         int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
         int row = ((int)(tank->pos.y)) / CELL_SIZE;
@@ -506,11 +483,6 @@ void checkTankCollision(Tank *tank) {
         return;
     }
     case DDown: {
-        if (tank->pos.y + TANK_SIZE >= FIELD_MAX_Y) {
-            tank->isMoving = false;
-            tank->pos.y = FIELD_MAX_Y - TANK_SIZE;
-            return;
-        }
         int startCol = ((int)tank->pos.x) / CELL_SIZE;
         int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
         int row = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
