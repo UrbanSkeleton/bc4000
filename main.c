@@ -36,6 +36,8 @@ typedef struct {
     Vector2 speed;
     Direction direction;
     Texture2D *texture;
+    char texCol;
+    char texColOffset;
     bool isMoving;
     char firedBulletCount;
     bool isFiring;
@@ -139,7 +141,7 @@ void drawForest() {
 void drawTank(Tank *tank) {
     static char textureRows[4] = {3, 1, 0, 2};
     Texture2D *tex = tank->texture;
-    int texX = 0;
+    int texX = (tank->texCol + tank->texColOffset) * TANK_TEXTURE_SIZE;
     int texY = textureRows[tank->direction] * TANK_TEXTURE_SIZE;
     int drawSize = TANK_TEXTURE_SIZE * 2;
     int drawOffset = (TANK_SIZE - drawSize) / 2;
@@ -501,6 +503,7 @@ void checkTankCollision(Tank *tank) {
 void updateTankState(float time, Tank *t) {
     if (!t->isMoving)
         return;
+    t->texColOffset = (t->texColOffset + 1) % 2;
     switch (t->direction) {
     case DLeft: {
         int toSnap = ((int)t->pos.x) % SNAP_TO;
