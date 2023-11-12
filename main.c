@@ -87,7 +87,7 @@ typedef struct {
     Texture2D border;
     Texture2D concrete;
     Texture2D forest;
-    Texture2D river;
+    Texture2D river[2];
     Texture2D blank;
     Texture2D player1Tank;
     Texture2D player2Tank;
@@ -104,6 +104,8 @@ typedef struct {
     CellSpec cellSpecs[CTMax];
     Explosion explosions[MAX_EXPLOSION_COUNT];
     Textures textures;
+    float frameTime;
+    float totalTime;
 } Game;
 
 static Game game;
@@ -220,8 +222,9 @@ void loadTextures() {
     game.textures.forest = LoadTexture("textures/forest.png");
     game.cellSpecs[CTForest] =
         (CellSpec){.texture = &game.textures.forest, .isPassable = true};
-    game.textures.river = LoadTexture("textures/river.png");
-    game.cellSpecs[CTRiver] = (CellSpec){.texture = &game.textures.river};
+    game.textures.river[0] = LoadTexture("textures/river1.png");
+    game.textures.river[1] = LoadTexture("textures/river2.png");
+    game.cellSpecs[CTRiver] = (CellSpec){.texture = &game.textures.river[0]};
     game.textures.blank = LoadTexture("textures/blank.png");
     game.cellSpecs[CTBlank] =
         (CellSpec){.texture = &game.textures.blank, .isPassable = true};
@@ -500,14 +503,14 @@ void checkTankCollision(Tank *tank) {
     }
 }
 
-void updateTankState(float time, Tank *t) {
+void updateTankState(Tank *t) {
     if (!t->isMoving)
         return;
     t->texColOffset = (t->texColOffset + 1) % 2;
     switch (t->direction) {
     case DLeft: {
         int toSnap = ((int)t->pos.x) % SNAP_TO;
-        int toMove = time * -t->speed.x;
+        int toMove = game.frameTime * -t->speed.x;
         if (toSnap && toSnap <= toMove) {
             t->pos.x -= toSnap;
             t->isMoving = false;
@@ -518,7 +521,7 @@ void updateTankState(float time, Tank *t) {
     }
     case DRight: {
         int toSnap = SNAP_TO - ((int)t->pos.x) % SNAP_TO;
-        int toMove = time * t->speed.x;
+        int toMove = game.frameTime * t->speed.x;
         if (toSnap <= toMove) {
             t->pos.x += toSnap;
             t->isMoving = false;
@@ -529,7 +532,7 @@ void updateTankState(float time, Tank *t) {
     }
     case DUp: {
         int toSnap = ((int)t->pos.y) % SNAP_TO;
-        int toMove = time * -t->speed.y;
+        int toMove = game.frameTime * -t->speed.y;
         if (toSnap && toSnap <= toMove) {
             t->pos.y -= toSnap;
             t->isMoving = false;
@@ -540,7 +543,7 @@ void updateTankState(float time, Tank *t) {
     }
     case DDown: {
         int toSnap = SNAP_TO - ((int)t->pos.y) % SNAP_TO;
-        int toMove = time * t->speed.y;
+        int toMove = game.frameTime * t->speed.y;
         if (toSnap <= toMove) {
             t->pos.y += toSnap;
             t->isMoving = false;
@@ -553,29 +556,31 @@ void updateTankState(float time, Tank *t) {
     checkTankCollision(&game.tanks[0]);
 }
 
-void updateBulletsState(float time) {
+void updateBulletsState() {
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
         if (b->type == BTNone)
             continue;
-        b->pos.x += (b->speed.x * time);
-        b->pos.y += (b->speed.y * time);
+        b->pos.x += (b->speed.x * game.frameTime);
+        b->pos.y += (b->speed.y * game.frameTime);
         checkBulletCollision(b);
     }
 }
 
-void updateExplosionsState(float time) {
+void updateExplosionsState() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         if (game.explosions[i].ttl > 0) {
-            game.explosions[i].ttl -= time;
+            game.explosions[i].ttl -= game.frameTime;
         }
     }
 }
 
-void updateGameState(float time) {
-    updateExplosionsState(time);
-    updateBulletsState(time);
-    updateTankState(time, &game.tanks[0]);
+void updateGameState() {
+    game.cellSpecs[CTRiver].texture =
+        &game.textures.river[((long)(game.totalTime * 2)) % 2];
+    updateExplosionsState();
+    updateBulletsState();
+    updateTankState(&game.tanks[0]);
 }
 
 int main(void) {
@@ -589,7 +594,9 @@ int main(void) {
 
     while (!WindowShouldClose()) {
         handleInput();
-        updateGameState(GetFrameTime());
+        game.frameTime = GetFrameTime();
+        game.totalTime = GetTime();
+        updateGameState();
         BeginDrawing();
         ClearBackground(BLACK);
         drawGame();
