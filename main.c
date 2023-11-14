@@ -19,15 +19,18 @@ const int TANK_TEXTURE_SIZE = 28;
 const int PLAYER1_START_COL = 4 * 4 + 4;
 const int PLAYER2_START_COL = 4 * 8 + 4;
 const int PLAYER_SPEED = 300;
-const int MAX_TANK_COUNT = 100;
+const int MAX_ENEMY_COUNT = 20;
+const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 200;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
 const int BULLET_SPEED = 400;
 const int BULLET_SIZE = 16;
 const int EXPLOSION_SIZE = 64;
 const float BULLET_EXPLOSION_TTL = 0.2f;
+const float ENEMY_SPAWN_INTERVAL = 2.0f;
 
 typedef enum { TPlayer1, TPlayer2, TBasic } TankType;
+typedef enum { TSPending, TSActive, TSDead } TankStatus;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
 
 typedef struct {
@@ -41,6 +44,7 @@ typedef struct {
     bool isMoving;
     char firedBulletCount;
     bool isFiring;
+    TankStatus status;
 } Tank;
 
 typedef struct {
@@ -91,6 +95,7 @@ typedef struct {
     Texture2D blank;
     Texture2D player1Tank;
     Texture2D player2Tank;
+    Texture2D enemies;
     Texture2D bullet;
     Texture2D bulletExplosions[3];
 } Textures;
@@ -100,17 +105,17 @@ typedef struct {
     Tank tanks[MAX_TANK_COUNT];
     Bullet bullets[MAX_BULLET_COUNT];
     Vector2 flagPos;
-    int tankCount;
     CellSpec cellSpecs[CTMax];
     Explosion explosions[MAX_EXPLOSION_COUNT];
     Textures textures;
     float frameTime;
     float totalTime;
+    float timeSinceSpawn;
 } Game;
 
 static Game game;
 
-void drawCell(Cell *cell) {
+static void drawCell(Cell *cell) {
     Texture2D *tex = game.cellSpecs[cell->type].texture;
     int w = tex->width / 4;
     int h = tex->height / 4;
@@ -122,7 +127,7 @@ void drawCell(Cell *cell) {
 #endif
 }
 
-void drawField() {
+static void drawField() {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             if (game.field[i][j].type != CTForest)
@@ -131,7 +136,7 @@ void drawField() {
     }
 }
 
-void drawForest() {
+static void drawForest() {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             if (game.field[i][j].type == CTForest)
@@ -140,7 +145,7 @@ void drawForest() {
     }
 }
 
-void drawTank(Tank *tank) {
+static void drawTank(Tank *tank) {
     static char textureRows[4] = {3, 1, 0, 2};
     Texture2D *tex = tank->texture;
     int texX = (tank->texCol + tank->texColOffset) * TANK_TEXTURE_SIZE;
@@ -154,13 +159,15 @@ void drawTank(Tank *tank) {
         (Vector2){}, 0, WHITE);
 }
 
-void drawTanks() {
-    for (int i = 0; i < game.tankCount; i++) {
-        drawTank(&game.tanks[i]);
+static void drawTanks() {
+    for (int i = 0; i < MAX_TANK_COUNT; i++) {
+        if (game.tanks[i].status == TSActive) {
+            drawTank(&game.tanks[i]);
+        }
     }
 }
 
-void drawFlag() {
+static void drawFlag() {
     Texture2D *tex = &game.textures.flag;
     DrawTexturePro(
         *tex, (Rectangle){0, 0, tex->width, tex->height},
@@ -168,7 +175,7 @@ void drawFlag() {
         (Vector2){}, 0, WHITE);
 }
 
-void drawBullets() {
+static void drawBullets() {
     static int x[4] = {24, 8, 0, 16};
     Texture2D *tex = &game.textures.bullet;
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
@@ -182,7 +189,7 @@ void drawBullets() {
     }
 }
 
-void drawExplosions() {
+static void drawExplosions() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         Explosion *e = &game.explosions[i];
         if (e->ttl <= 0)
@@ -199,7 +206,7 @@ void drawExplosions() {
     }
 }
 
-void drawGame() {
+static void drawGame() {
     drawField();
     drawBullets();
     drawTanks();
@@ -208,8 +215,9 @@ void drawGame() {
     drawExplosions();
 }
 
-void loadTextures() {
+static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.enemies = LoadTexture("textures/enemies.png");
     game.textures.border = LoadTexture("textures/border.png");
     game.cellSpecs[CTBorder] =
         (CellSpec){.texture = &game.textures.border, .isSolid = true};
@@ -239,7 +247,7 @@ void loadTextures() {
         LoadTexture("textures/bullet_explosion_3.png");
 }
 
-void loadField(const char *filename) {
+static void loadField(const char *filename) {
     Buffer buf = readFile("levels/1.level");
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
@@ -273,7 +281,7 @@ void loadField(const char *filename) {
     }
 }
 
-void initGame() {
+static void initGame() {
     loadTextures();
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
@@ -287,8 +295,24 @@ void initGame() {
                            .pos = (Vector2){CELL_SIZE * PLAYER1_START_COL,
                                             CELL_SIZE * (FIELD_ROWS - 4 - 2)},
                            .direction = DUp,
+                           .status = TSActive,
                            .texture = &game.textures.player1Tank};
-    game.tankCount = 1;
+    game.tanks[1] = (Tank){.type = TPlayer2,
+                           .pos = (Vector2){CELL_SIZE * PLAYER2_START_COL,
+                                            CELL_SIZE * (FIELD_ROWS - 4 - 2)},
+                           .direction = DUp,
+                           .status = TSPending,
+                           .texture = &game.textures.player1Tank};
+    static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
+                                   FIELD_COLS - 8 - 4};
+    for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
+        game.tanks[i + 2] = (Tank){
+            .type = TBasic,
+            .pos = (Vector2){CELL_SIZE * startingCols[i % 3], CELL_SIZE * 2},
+            .direction = DDown,
+            .status = TSPending,
+            .texture = &game.textures.enemies};
+    }
     game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
                              CELL_SIZE * (FIELD_ROWS - 4 - 2)};
 }
@@ -298,7 +322,7 @@ static void finishFire(Tank *t) {
         t->isFiring = false;
 }
 
-void fireBullet(Tank *t) {
+static void fireBullet(Tank *t) {
     if (t->firedBulletCount >= 1 || t->isFiring)
         return;
     t->firedBulletCount++;
@@ -338,7 +362,7 @@ void fireBullet(Tank *t) {
     }
 }
 
-void handleInput() {
+static void handleInput() {
     Tank *t = &game.tanks[0];
     if (t->isMoving)
         return;
@@ -413,7 +437,7 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
     }
 }
 
-void checkBulletCollision(Bullet *b) {
+static void checkBulletCollision(Bullet *b) {
     switch (b->direction) {
     case DRight: {
         int startRow = ((int)b->pos.y) / CELL_SIZE;
@@ -446,7 +470,7 @@ void checkBulletCollision(Bullet *b) {
     }
 }
 
-void checkTankCollision(Tank *tank) {
+static void checkTankCollision(Tank *tank) {
     switch (tank->direction) {
     case DRight: {
         int startRow = ((int)tank->pos.y) / CELL_SIZE;
@@ -503,7 +527,7 @@ void checkTankCollision(Tank *tank) {
     }
 }
 
-void updateTankState(Tank *t) {
+static void updateTankState(Tank *t) {
     if (!t->isMoving)
         return;
     t->texColOffset = (t->texColOffset + 1) % 2;
@@ -556,7 +580,7 @@ void updateTankState(Tank *t) {
     checkTankCollision(&game.tanks[0]);
 }
 
-void updateBulletsState() {
+static void updateBulletsState() {
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
         if (b->type == BTNone)
@@ -567,7 +591,7 @@ void updateBulletsState() {
     }
 }
 
-void updateExplosionsState() {
+static void updateExplosionsState() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         if (game.explosions[i].ttl > 0) {
             game.explosions[i].ttl -= game.frameTime;
@@ -575,12 +599,29 @@ void updateExplosionsState() {
     }
 }
 
-void updateGameState() {
+static void spawnTanks() {
+    if (game.timeSinceSpawn < ENEMY_SPAWN_INTERVAL)
+        return;
+    game.timeSinceSpawn = 0;
+    for (int i = 2; i < MAX_TANK_COUNT; i++) {
+        if (game.tanks[i].status == TSPending) {
+            game.tanks[i].status = TSActive;
+            return;
+        }
+    }
+}
+
+static void updateGameState() {
     game.cellSpecs[CTRiver].texture =
         &game.textures.river[((long)(game.totalTime * 2)) % 2];
     updateExplosionsState();
     updateBulletsState();
-    updateTankState(&game.tanks[0]);
+    for (int i = 0; i < MAX_TANK_COUNT; i++) {
+        if (game.tanks[i].status == TSActive) {
+            updateTankState(&game.tanks[i]);
+        }
+    }
+    spawnTanks();
 }
 
 int main(void) {
@@ -596,6 +637,7 @@ int main(void) {
         handleInput();
         game.frameTime = GetFrameTime();
         game.totalTime = GetTime();
+        game.timeSinceSpawn += game.frameTime;
         updateGameState();
         BeginDrawing();
         ClearBackground(BLACK);
