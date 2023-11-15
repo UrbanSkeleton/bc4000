@@ -28,9 +28,10 @@ const int BULLET_SIZE = 16;
 const int EXPLOSION_SIZE = 64;
 const float BULLET_EXPLOSION_TTL = 0.2f;
 const float ENEMY_SPAWN_INTERVAL = 2.0f;
+const float SPAWNING_TIME = 1.0f;
 
 typedef enum { TPlayer1, TPlayer2, TBasic } TankType;
-typedef enum { TSPending, TSActive, TSDead } TankStatus;
+typedef enum { TSPending, TSSpawning, TSActive, TSDead } TankStatus;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
 
 typedef struct {
@@ -45,6 +46,7 @@ typedef struct {
     char firedBulletCount;
     bool isFiring;
     TankStatus status;
+    float spawningTime;
 } Tank;
 
 typedef struct {
@@ -98,6 +100,7 @@ typedef struct {
     Texture2D enemies;
     Texture2D bullet;
     Texture2D bulletExplosions[3];
+    Texture2D spawningTank;
 } Textures;
 
 typedef struct {
@@ -111,6 +114,8 @@ typedef struct {
     float frameTime;
     float totalTime;
     float timeSinceSpawn;
+    char enemyCount;
+    char maxActiveEnemyCount;
 } Game;
 
 static Game game;
@@ -159,10 +164,26 @@ static void drawTank(Tank *tank) {
         (Vector2){}, 0, WHITE);
 }
 
+static void drawSpawningTank(Tank *tank) {
+    static char textureCols[] = {3, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3};
+    Texture2D *tex = &game.textures.spawningTank;
+    int textureSize = tex->height;
+    int i = tank->spawningTime / (SPAWNING_TIME / ASIZE(textureCols));
+    if (i >= ASIZE(textureCols))
+        i = ASIZE(textureCols) - 1;
+    int texX = textureCols[i] * textureSize;
+    int drawSize = TANK_TEXTURE_SIZE * 2;
+    DrawTexturePro(*tex, (Rectangle){texX, 0, textureSize, textureSize},
+                   (Rectangle){tank->pos.x, tank->pos.y, drawSize, drawSize},
+                   (Vector2){}, 0, WHITE);
+}
+
 static void drawTanks() {
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         if (game.tanks[i].status == TSActive) {
             drawTank(&game.tanks[i]);
+        } else if (game.tanks[i].status == TSSpawning) {
+            drawSpawningTank(&game.tanks[i]);
         }
     }
 }
@@ -217,6 +238,7 @@ static void drawGame() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.spawningTank = LoadTexture("textures/born.png");
     game.textures.enemies = LoadTexture("textures/enemies.png");
     game.textures.border = LoadTexture("textures/border.png");
     game.cellSpecs[CTBorder] =
@@ -313,6 +335,7 @@ static void initGame() {
             .status = TSPending,
             .texture = &game.textures.enemies};
     }
+    game.maxActiveEnemyCount = 4;
     game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
                              CELL_SIZE * (FIELD_ROWS - 4 - 2)};
 }
@@ -600,12 +623,13 @@ static void updateExplosionsState() {
 }
 
 static void spawnTanks() {
-    if (game.timeSinceSpawn < ENEMY_SPAWN_INTERVAL)
+    if (game.timeSinceSpawn < ENEMY_SPAWN_INTERVAL ||
+        game.enemyCount >= game.maxActiveEnemyCount)
         return;
     game.timeSinceSpawn = 0;
     for (int i = 2; i < MAX_TANK_COUNT; i++) {
         if (game.tanks[i].status == TSPending) {
-            game.tanks[i].status = TSActive;
+            game.tanks[i].status = TSSpawning;
             return;
         }
     }
@@ -617,8 +641,14 @@ static void updateGameState() {
     updateExplosionsState();
     updateBulletsState();
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
-        if (game.tanks[i].status == TSActive) {
+        Tank *tank = &game.tanks[i];
+        if (tank->status == TSActive) {
             updateTankState(&game.tanks[i]);
+        } else if (tank->status == TSSpawning) {
+            tank->spawningTime += game.frameTime;
+            if (tank->spawningTime >= SPAWNING_TIME) {
+                tank->status = TSActive;
+            }
         }
     }
     spawnTanks();
