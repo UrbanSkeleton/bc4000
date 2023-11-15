@@ -16,6 +16,8 @@ const int CELL_SIZE = 16;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int TANK_TEXTURE_SIZE = 28;
+const int UI_TANK_TEXTURE_SIZE = 14;
+const int UI_TANK_SIZE = CELL_SIZE * 2;
 const int PLAYER1_START_COL = 4 * 4 + 4;
 const int PLAYER2_START_COL = 4 * 8 + 4;
 const int PLAYER_SPEED = 300;
@@ -101,6 +103,7 @@ typedef struct {
     Texture2D bullet;
     Texture2D bulletExplosions[3];
     Texture2D spawningTank;
+    Texture2D uiTank;
 } Textures;
 
 typedef struct {
@@ -114,7 +117,8 @@ typedef struct {
     float frameTime;
     float totalTime;
     float timeSinceSpawn;
-    char enemyCount;
+    char activeEnemyCount;
+    char pendingEnemyCount;
     char maxActiveEnemyCount;
 } Game;
 
@@ -227,6 +231,22 @@ static void drawExplosions() {
     }
 }
 
+static void drawUITanks() {
+    Texture2D *tex = &game.textures.uiTank;
+    int drawSize = UI_TANK_TEXTURE_SIZE * 2;
+    int drawOffset = (UI_TANK_SIZE - drawSize) / 2;
+    for (int i = 0; i < game.pendingEnemyCount; i++) {
+        DrawTexturePro(
+            *tex, (Rectangle){0, 0, UI_TANK_TEXTURE_SIZE, UI_TANK_TEXTURE_SIZE},
+            (Rectangle){(14 * 4 + 2 + 2 * (i % 2)) * CELL_SIZE + drawOffset,
+                        ((2 + 2) + (i / 2 * 2)) * CELL_SIZE + drawOffset,
+                        drawSize, drawSize},
+            (Vector2){}, 0, WHITE);
+    }
+}
+
+static void drawUI() { drawUITanks(); }
+
 static void drawGame() {
     drawField();
     drawBullets();
@@ -234,10 +254,12 @@ static void drawGame() {
     drawFlag();
     drawForest();
     drawExplosions();
+    drawUI();
 }
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.uiTank = LoadTexture("textures/uiTank.png");
     game.textures.spawningTank = LoadTexture("textures/born.png");
     game.textures.enemies = LoadTexture("textures/enemies.png");
     game.textures.border = LoadTexture("textures/border.png");
@@ -335,6 +357,7 @@ static void initGame() {
             .status = TSPending,
             .texture = &game.textures.enemies};
     }
+    game.pendingEnemyCount = MAX_ENEMY_COUNT;
     game.maxActiveEnemyCount = 4;
     game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
                              CELL_SIZE * (FIELD_ROWS - 4 - 2)};
@@ -624,12 +647,14 @@ static void updateExplosionsState() {
 
 static void spawnTanks() {
     if (game.timeSinceSpawn < ENEMY_SPAWN_INTERVAL ||
-        game.enemyCount >= game.maxActiveEnemyCount)
+        game.activeEnemyCount >= game.maxActiveEnemyCount)
         return;
     game.timeSinceSpawn = 0;
     for (int i = 2; i < MAX_TANK_COUNT; i++) {
         if (game.tanks[i].status == TSPending) {
             game.tanks[i].status = TSSpawning;
+            game.activeEnemyCount++;
+            game.pendingEnemyCount--;
             return;
         }
     }
