@@ -23,12 +23,12 @@ const int PLAYER2_START_COL = 4 * 8 + 4;
 const int PLAYER_SPEED = 300;
 const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
-const int MAX_BULLET_COUNT = 200;
+const int MAX_BULLET_COUNT = 100;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
 const int BULLET_SPEED = 400;
 const int BULLET_SIZE = 16;
-const int EXPLOSION_SIZE = 64;
 const float BULLET_EXPLOSION_TTL = 0.2f;
+const float BIG_EXPLOSION_TTL = 0.3f;
 const float ENEMY_SPAWN_INTERVAL = 2.0f;
 const float SPAWNING_TIME = 1.0f;
 
@@ -52,8 +52,18 @@ typedef struct {
 } Tank;
 
 typedef struct {
+    float duration;
+    Texture2D *textures;
+    char textureCount;
+} Animation;
+
+typedef enum { ETBullet, ETBig, ETMax } ExplosionType;
+
+typedef struct {
+    ExplosionType type;
     Vector2 pos;
     float ttl;
+    float maxTtl;
 } Explosion;
 
 typedef enum { BTNone, BTPlayer, BTEnemy } BulletType;
@@ -102,6 +112,7 @@ typedef struct {
     Texture2D enemies;
     Texture2D bullet;
     Texture2D bulletExplosions[3];
+    Texture2D bigExplosions[5];
     Texture2D spawningTank;
     Texture2D uiTank;
 } Textures;
@@ -112,6 +123,7 @@ typedef struct {
     Bullet bullets[MAX_BULLET_COUNT];
     Vector2 flagPos;
     CellSpec cellSpecs[CTMax];
+    Animation explosionAnimations[ETMax];
     Explosion explosions[MAX_EXPLOSION_COUNT];
     Textures textures;
     float frameTime;
@@ -219,14 +231,16 @@ static void drawExplosions() {
         Explosion *e = &game.explosions[i];
         if (e->ttl <= 0)
             continue;
-        int texCount = ASIZE(game.textures.bulletExplosions);
-        int index = e->ttl / (BULLET_EXPLOSION_TTL / texCount);
+        int texCount = game.explosionAnimations[e->type].textureCount;
+        int index =
+            e->ttl / (game.explosionAnimations[e->type].duration / texCount);
         if (index >= texCount)
             index = texCount - 1;
-        Texture2D *tex = &game.textures.bulletExplosions[texCount - index - 1];
+        Texture2D *tex =
+            &game.explosionAnimations[e->type].textures[texCount - index - 1];
         DrawTexturePro(
             *tex, (Rectangle){0, 0, tex->width, tex->height},
-            (Rectangle){e->pos.x, e->pos.y, EXPLOSION_SIZE, EXPLOSION_SIZE},
+            (Rectangle){e->pos.x, e->pos.y, tex->width * 2, tex->height * 2},
             (Vector2){}, 0, WHITE);
     }
 }
@@ -289,6 +303,16 @@ static void loadTextures() {
         LoadTexture("textures/bullet_explosion_2.png");
     game.textures.bulletExplosions[2] =
         LoadTexture("textures/bullet_explosion_3.png");
+    game.textures.bigExplosions[0] =
+        LoadTexture("textures/big_explosion_1.png");
+    game.textures.bigExplosions[1] =
+        LoadTexture("textures/big_explosion_2.png");
+    game.textures.bigExplosions[2] =
+        LoadTexture("textures/big_explosion_3.png");
+    game.textures.bigExplosions[3] =
+        LoadTexture("textures/big_explosion_4.png");
+    game.textures.bigExplosions[4] =
+        LoadTexture("textures/big_explosion_5.png");
 }
 
 static void loadField(const char *filename) {
@@ -361,6 +385,14 @@ static void initGame() {
     game.maxActiveEnemyCount = 4;
     game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
                              CELL_SIZE * (FIELD_ROWS - 4 - 2)};
+    game.explosionAnimations[ETBullet] =
+        (Animation){.duration = BULLET_EXPLOSION_TTL,
+                    .textureCount = ASIZE(game.textures.bulletExplosions),
+                    .textures = &game.textures.bulletExplosions[0]};
+    game.explosionAnimations[ETBig] =
+        (Animation){.duration = BIG_EXPLOSION_TTL,
+                    .textureCount = ASIZE(game.textures.bigExplosions),
+                    .textures = &game.textures.bigExplosions[0]};
 }
 
 static void finishFire(Tank *t) {
@@ -440,11 +472,13 @@ static void handleInput() {
 static void destroyBullet(Bullet *b) {
     b->type = BTNone;
     b->tank->firedBulletCount--;
-    int offset = (EXPLOSION_SIZE - BULLET_SIZE) / 2;
+    int explosionSize =
+        game.explosionAnimations[ETBullet].textures[0].width * 2;
+    int offset = (explosionSize - BULLET_SIZE) / 2;
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         if (game.explosions[i].ttl <= 0) {
             game.explosions[i].ttl = BULLET_EXPLOSION_TTL;
-
+            game.explosions[i].type = ETBullet;
             game.explosions[i].pos =
                 (Vector2){b->pos.x - offset, b->pos.y - offset};
             break;
