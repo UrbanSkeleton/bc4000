@@ -21,6 +21,7 @@ const int UI_TANK_SIZE = CELL_SIZE * 2;
 const int PLAYER1_START_COL = 4 * 4 + 4;
 const int PLAYER2_START_COL = 4 * 8 + 4;
 const int PLAYER_SPEED = 300;
+const int BASIC_ENEMY_SPEED = 140;
 const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 100;
@@ -28,21 +29,26 @@ const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
 const int BULLET_SPEED = 400;
 const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
-const float BIG_EXPLOSION_TTL = 0.3f;
+const float BIG_EXPLOSION_TTL = 0.4f;
 const float ENEMY_SPAWN_INTERVAL = 2.0f;
 const float SPAWNING_TIME = 1.0f;
 
-typedef enum { TPlayer1, TPlayer2, TBasic } TankType;
+typedef enum { TPlayer1, TPlayer2, TBasic, TMax } TankType;
 typedef enum { TSPending, TSSpawning, TSActive, TSDead } TankStatus;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
+
+typedef struct {
+    Texture2D *texture;
+    char texCol;
+    int speed;
+    bool isEnemy;
+} TankSpec;
 
 typedef struct {
     TankType type;
     Vector2 pos;
     Vector2 speed;
     Direction direction;
-    Texture2D *texture;
-    char texCol;
     char texColOffset;
     bool isMoving;
     char firedBulletCount;
@@ -50,6 +56,12 @@ typedef struct {
     TankStatus status;
     float spawningTime;
 } Tank;
+
+typedef struct {
+    bool fire;
+    bool move;
+    Direction direction;
+} Command;
 
 typedef struct {
     float duration;
@@ -120,6 +132,7 @@ typedef struct {
 typedef struct {
     Cell field[FIELD_ROWS][FIELD_COLS];
     Tank tanks[MAX_TANK_COUNT];
+    TankSpec tankSpecs[TMax];
     Bullet bullets[MAX_BULLET_COUNT];
     Vector2 flagPos;
     CellSpec cellSpecs[CTMax];
@@ -168,8 +181,9 @@ static void drawForest() {
 
 static void drawTank(Tank *tank) {
     static char textureRows[4] = {3, 1, 0, 2};
-    Texture2D *tex = tank->texture;
-    int texX = (tank->texCol + tank->texColOffset) * TANK_TEXTURE_SIZE;
+    Texture2D *tex = game.tankSpecs[tank->type].texture;
+    int texX = (game.tankSpecs[tank->type].texCol + tank->texColOffset) *
+               TANK_TEXTURE_SIZE;
     int texY = textureRows[tank->direction] * TANK_TEXTURE_SIZE;
     int drawSize = TANK_TEXTURE_SIZE * 2;
     int drawOffset = (TANK_SIZE - drawSize) / 2;
@@ -359,18 +373,30 @@ static void initGame() {
         }
     }
     loadField("levels/1.level");
-    game.tanks[0] = (Tank){.type = TPlayer1,
-                           .pos = (Vector2){CELL_SIZE * PLAYER1_START_COL,
-                                            CELL_SIZE * (FIELD_ROWS - 4 - 2)},
-                           .direction = DUp,
-                           .status = TSActive,
-                           .texture = &game.textures.player1Tank};
-    game.tanks[1] = (Tank){.type = TPlayer2,
-                           .pos = (Vector2){CELL_SIZE * PLAYER2_START_COL,
-                                            CELL_SIZE * (FIELD_ROWS - 4 - 2)},
-                           .direction = DUp,
-                           .status = TSPending,
-                           .texture = &game.textures.player1Tank};
+    game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
+                                          .texCol = 0,
+                                          .speed = PLAYER_SPEED};
+    game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
+                                          .texCol = 0,
+                                          .speed = PLAYER_SPEED};
+    game.tankSpecs[TBasic] = (TankSpec){.texture = &game.textures.enemies,
+                                        .texCol = 0,
+                                        .speed = BASIC_ENEMY_SPEED,
+                                        .isEnemy = true};
+    game.tanks[0] = (Tank){
+        .type = TPlayer1,
+        .pos = (Vector2){CELL_SIZE * PLAYER1_START_COL,
+                         CELL_SIZE * (FIELD_ROWS - 4 - 2)},
+        .direction = DUp,
+        .status = TSActive,
+    };
+    game.tanks[1] = (Tank){
+        .type = TPlayer2,
+        .pos = (Vector2){CELL_SIZE * PLAYER2_START_COL,
+                         CELL_SIZE * (FIELD_ROWS - 4 - 2)},
+        .direction = DUp,
+        .status = TSPending,
+    };
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
                                    FIELD_COLS - 8 - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
@@ -379,7 +405,7 @@ static void initGame() {
             .pos = (Vector2){CELL_SIZE * startingCols[i % 3], CELL_SIZE * 2},
             .direction = DDown,
             .status = TSPending,
-            .texture = &game.textures.enemies};
+        };
     }
     game.pendingEnemyCount = MAX_ENEMY_COUNT;
     game.maxActiveEnemyCount = 4;
@@ -440,49 +466,99 @@ static void fireBullet(Tank *t) {
     }
 }
 
-static void handleInput() {
-    Tank *t = &game.tanks[0];
-    if (t->isMoving)
-        return;
-    t->speed.x = t->speed.y = 0;
-    if (IsKeyDown(KEY_RIGHT)) {
-        t->isMoving = true;
-        t->speed.x = PLAYER_SPEED;
-        t->direction = DRight;
-    } else if (IsKeyDown(KEY_LEFT)) {
-        t->isMoving = true;
-        t->speed.x = -PLAYER_SPEED;
-        t->direction = DLeft;
-    } else if (IsKeyDown(KEY_UP)) {
-        t->isMoving = true;
-        t->speed.y = -PLAYER_SPEED;
-        t->direction = DUp;
-    } else if (IsKeyDown(KEY_DOWN)) {
-        t->isMoving = true;
-        t->speed.y = PLAYER_SPEED;
-        t->direction = DDown;
-    }
-    if (IsKeyDown(KEY_Z)) {
+static void handleCommand(Tank *t, Command cmd) {
+    if (cmd.fire) {
         fireBullet(t);
     } else {
         finishFire(t);
     }
+    if (t->isMoving)
+        return;
+    t->speed.x = t->speed.y = 0;
+    if (!cmd.move)
+        return;
+    t->direction = cmd.direction;
+    t->isMoving = true;
+    int speed = game.tankSpecs[t->type].speed;
+    switch (cmd.direction) {
+    case DRight:
+        t->speed.x = speed;
+        break;
+    case DLeft:
+        t->speed.x = -speed;
+        break;
+    case DUp:
+        t->speed.y = -speed;
+        break;
+    case DDown:
+        t->speed.y = speed;
+        break;
+    }
 }
 
-static void destroyBullet(Bullet *b) {
-    b->type = BTNone;
-    b->tank->firedBulletCount--;
-    int explosionSize =
-        game.explosionAnimations[ETBullet].textures[0].width * 2;
-    int offset = (explosionSize - BULLET_SIZE) / 2;
+static void handleTankAI(Tank *t) {
+    static Direction dirs[] = {DDown,  DDown, DDown, DDown, DRight,
+                               DRight, DLeft, DLeft, DUp};
+    Command cmd = {};
+    cmd.fire = rand() % 100 == 0;
+    if (!t->isMoving || (rand() % 100 == 0)) {
+        t->isMoving = false;
+        cmd.move = true;
+        cmd.direction = dirs[rand() % ASIZE(dirs)];
+    }
+    handleCommand(t, cmd);
+}
+
+static void handleAI() {
+    for (int i = 2; i < MAX_TANK_COUNT; i++) {
+        Tank *t = &game.tanks[i];
+        if (t->status != TSActive)
+            continue;
+        handleTankAI(t);
+    }
+}
+
+static void handleInput() {
+    Command cmd = {};
+    if (IsKeyDown(KEY_RIGHT)) {
+        cmd.move = true;
+        cmd.direction = DRight;
+    } else if (IsKeyDown(KEY_LEFT)) {
+        cmd.move = true;
+        cmd.direction = DLeft;
+    } else if (IsKeyDown(KEY_UP)) {
+        cmd.move = true;
+        cmd.direction = DUp;
+    } else if (IsKeyDown(KEY_DOWN)) {
+        cmd.move = true;
+        cmd.direction = DDown;
+    }
+    if (IsKeyDown(KEY_Z)) {
+        cmd.fire = true;
+    }
+    handleCommand(&game.tanks[0], cmd);
+}
+
+static void createExplosion(ExplosionType type, Vector2 targetPos,
+                            int targetSize) {
+    int explosionSize = game.explosionAnimations[type].textures[0].width * 2;
+    int offset = (explosionSize - targetSize) / 2;
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         if (game.explosions[i].ttl <= 0) {
-            game.explosions[i].ttl = BULLET_EXPLOSION_TTL;
-            game.explosions[i].type = ETBullet;
+            game.explosions[i].ttl = game.explosionAnimations[type].duration;
+            game.explosions[i].type = type;
             game.explosions[i].pos =
-                (Vector2){b->pos.x - offset, b->pos.y - offset};
+                (Vector2){targetPos.x - offset, targetPos.y - offset};
             break;
         }
+    }
+}
+
+static void destroyBullet(Bullet *b, bool explosion) {
+    b->type = BTNone;
+    b->tank->firedBulletCount--;
+    if (explosion) {
+        createExplosion(ETBullet, b->pos, BULLET_SIZE);
     }
 }
 
@@ -497,7 +573,7 @@ static void checkBulletRows(Bullet *b, int startRow, int endRow, int col) {
     for (int r = startRow; r <= endRow; r++) {
         CellType cellType = game.field[r][col].type;
         if (game.cellSpecs[cellType].isSolid) {
-            destroyBullet(b);
+            destroyBullet(b, true);
             for (int rr = startRow - 1; rr <= endRow + 1; rr++)
                 destroyBrick(rr, col);
             return;
@@ -509,7 +585,7 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
     for (int c = startCol; c <= endCol; c++) {
         CellType cellType = game.field[row][c].type;
         if (game.cellSpecs[cellType].isSolid) {
-            destroyBullet(b);
+            destroyBullet(b, true);
             for (int cc = startCol - 1; cc <= endCol + 1; cc++)
                 destroyBrick(row, cc);
             return;
@@ -517,7 +593,49 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
     }
 }
 
+static void destroyTank(Tank *t) {
+    t->status = TSDead;
+    if (game.tankSpecs[t->type].isEnemy) {
+        game.activeEnemyCount--;
+    }
+    createExplosion(ETBig, t->pos, TANK_SIZE);
+}
+
+static void checkBulletHit(Bullet *b) {
+    for (int i = 0; i < MAX_TANK_COUNT; i++) {
+        Tank *t = &game.tanks[i];
+        if (t->status != TSActive || b->tank == t ||
+            (game.tankSpecs[b->tank->type].isEnemy &&
+             game.tankSpecs[t->type].isEnemy))
+            continue;
+        if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, t->pos.x,
+                      t->pos.y, TANK_SIZE, TANK_SIZE)) {
+            destroyBullet(b, true);
+            destroyTank(t);
+            break;
+        }
+    }
+}
+
+static bool checkBulletToBulletCollision(Bullet *b) {
+    for (int i = 0; i < MAX_BULLET_COUNT; i++) {
+        Bullet *b2 = &game.bullets[i];
+        if (b == b2 || b2->type == BTNone)
+            continue;
+        if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, b2->pos.x,
+                      b2->pos.y, BULLET_SIZE, BULLET_SIZE)) {
+            destroyBullet(b, false);
+            destroyBullet(b2, false);
+            return true;
+        }
+    }
+    return false;
+}
+
 static void checkBulletCollision(Bullet *b) {
+    if (checkBulletToBulletCollision(b))
+        return;
+    checkBulletHit(b);
     switch (b->direction) {
     case DRight: {
         int startRow = ((int)b->pos.y) / CELL_SIZE;
@@ -548,6 +666,18 @@ static void checkBulletCollision(Bullet *b) {
         return;
     }
     }
+}
+
+static bool checkTankToTankCollision(Tank *t) {
+    for (int i = 0; i < MAX_TANK_COUNT; i++) {
+        Tank *tank = &game.tanks[i];
+        if (t == tank || tank->status != TSActive)
+            continue;
+        if (collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, tank->pos.x,
+                      tank->pos.y, TANK_SIZE, TANK_SIZE))
+            return true;
+    }
+    return false;
 }
 
 static void checkTankCollision(Tank *tank) {
@@ -611,15 +741,16 @@ static void updateTankState(Tank *t) {
     if (!t->isMoving)
         return;
     t->texColOffset = (t->texColOffset + 1) % 2;
+    Vector2 move = {};
     switch (t->direction) {
     case DLeft: {
         int toSnap = ((int)t->pos.x) % SNAP_TO;
         int toMove = game.frameTime * -t->speed.x;
         if (toSnap && toSnap <= toMove) {
-            t->pos.x -= toSnap;
-            t->isMoving = false;
+            move.x = -toSnap;
+            t->isMoving = game.tankSpecs[t->type].isEnemy;
         } else {
-            t->pos.x -= toMove;
+            move.x = -toMove;
         }
         break;
     }
@@ -627,10 +758,10 @@ static void updateTankState(Tank *t) {
         int toSnap = SNAP_TO - ((int)t->pos.x) % SNAP_TO;
         int toMove = game.frameTime * t->speed.x;
         if (toSnap <= toMove) {
-            t->pos.x += toSnap;
-            t->isMoving = false;
+            move.x = toSnap;
+            t->isMoving = game.tankSpecs[t->type].isEnemy;
         } else {
-            t->pos.x += toMove;
+            move.x = toMove;
         }
         break;
     }
@@ -638,10 +769,10 @@ static void updateTankState(Tank *t) {
         int toSnap = ((int)t->pos.y) % SNAP_TO;
         int toMove = game.frameTime * -t->speed.y;
         if (toSnap && toSnap <= toMove) {
-            t->pos.y -= toSnap;
-            t->isMoving = false;
+            move.y = -toSnap;
+            t->isMoving = game.tankSpecs[t->type].isEnemy;
         } else {
-            t->pos.y -= toMove;
+            move.y = -toMove;
         }
         break;
     }
@@ -649,15 +780,23 @@ static void updateTankState(Tank *t) {
         int toSnap = SNAP_TO - ((int)t->pos.y) % SNAP_TO;
         int toMove = game.frameTime * t->speed.y;
         if (toSnap <= toMove) {
-            t->pos.y += toSnap;
-            t->isMoving = false;
+            move.y = toSnap;
+            t->isMoving = game.tankSpecs[t->type].isEnemy;
         } else {
-            t->pos.y += toMove;
+            move.y = toMove;
         }
         break;
     }
     }
-    checkTankCollision(&game.tanks[0]);
+    t->pos.x += move.x;
+    t->pos.y += move.y;
+    if (checkTankToTankCollision(t)) {
+        t->pos.x -= move.x;
+        t->pos.y -= move.y;
+        t->isMoving = false;
+    } else {
+        checkTankCollision(t);
+    }
 }
 
 static void updateBulletsState() {
@@ -723,10 +862,11 @@ int main(void) {
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
-        handleInput();
         game.frameTime = GetFrameTime();
         game.totalTime = GetTime();
         game.timeSinceSpawn += game.frameTime;
+        handleInput();
+        handleAI();
         updateGameState();
         BeginDrawing();
         ClearBackground(BLACK);
