@@ -15,6 +15,7 @@ const int FIELD_ROWS = 56;
 const int CELL_SIZE = 16;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
+const int FLAG_SIZE = TANK_SIZE;
 const int TANK_TEXTURE_SIZE = 28;
 const int UI_TANK_TEXTURE_SIZE = 14;
 const int UI_TANK_SIZE = CELL_SIZE * 2;
@@ -36,6 +37,15 @@ const float SPAWNING_TIME = 1.0f;
 typedef enum { TPlayer1, TPlayer2, TBasic, TMax } TankType;
 typedef enum { TSPending, TSSpawning, TSActive, TSDead } TankStatus;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
+typedef enum { UIFlag, UIMax } UIElementType;
+
+typedef struct {
+    Texture2D *texture;
+    Rectangle textureSrc;
+    Vector2 pos;
+    Vector2 size;
+    Vector2 drawSize;
+} UIElement;
 
 typedef struct {
     Texture2D *texture;
@@ -126,6 +136,7 @@ typedef struct {
     Texture2D bigExplosions[5];
     Texture2D spawningTank;
     Texture2D uiTank;
+    Texture2D uiFlag;
 } Textures;
 
 typedef struct {
@@ -144,6 +155,7 @@ typedef struct {
     char activeEnemyCount;
     char pendingEnemyCount;
     char maxActiveEnemyCount;
+    UIElement uiElements[UIMax];
 } Game;
 
 static Game game;
@@ -221,7 +233,7 @@ static void drawFlag() {
     Texture2D *tex = &game.textures.flag;
     DrawTexturePro(
         *tex, (Rectangle){0, 0, tex->width, tex->height},
-        (Rectangle){game.flagPos.x, game.flagPos.y, TANK_SIZE, TANK_SIZE},
+        (Rectangle){game.flagPos.x, game.flagPos.y, FLAG_SIZE, FLAG_SIZE},
         (Vector2){}, 0, WHITE);
 }
 
@@ -272,7 +284,25 @@ static void drawUITanks() {
     }
 }
 
-static void drawUI() { drawUITanks(); }
+static void drawUIElement(UIElement *el) {
+    int drawOffsetX = (el->size.x - el->drawSize.x) / 2;
+    int drawOffsetY = (el->size.y - el->drawSize.y) / 2;
+    DrawTexturePro(*(el->texture), el->textureSrc,
+                   (Rectangle){el->pos.x + drawOffsetX, el->pos.y + drawOffsetY,
+                               el->drawSize.x, el->drawSize.y},
+                   (Vector2){}, 0, WHITE);
+}
+
+static void drawUIElements() {
+    for (int i = 0; i < UIMax; i++) {
+        drawUIElement(&game.uiElements[i]);
+    }
+}
+
+static void drawUI() {
+    drawUITanks();
+    drawUIElements();
+}
 
 static void drawGame() {
     drawField();
@@ -286,6 +316,7 @@ static void drawGame() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.uiFlag = LoadTexture("textures/uiFlag.png");
     game.textures.uiTank = LoadTexture("textures/uiTank.png");
     game.textures.spawningTank = LoadTexture("textures/born.png");
     game.textures.enemies = LoadTexture("textures/enemies.png");
@@ -418,6 +449,19 @@ static void initGame() {
         (Animation){.duration = BIG_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bigExplosions),
                     .textures = &game.textures.bigExplosions[0]};
+    game.timeSinceSpawn = ENEMY_SPAWN_INTERVAL;
+    game.uiElements[UIFlag] =
+        (UIElement){.texture = &game.textures.uiFlag,
+                    .textureSrc = (Rectangle){0, 0, game.textures.uiFlag.width,
+                                              game.textures.uiFlag.height},
+                    .pos =
+                        (Vector2){
+                            (14 * 4 + 2) * CELL_SIZE,
+                            (11 * 4 * CELL_SIZE),
+                        },
+                    .size = (Vector2){CELL_SIZE * 4, CELL_SIZE * 4},
+                    .drawSize = (Vector2){game.textures.uiFlag.width * 2,
+                                          game.textures.uiFlag.height * 2}};
 }
 
 static void finishFire(Tank *t) {
@@ -737,7 +781,21 @@ static bool checkBulletToBulletCollision(Bullet *b) {
     return false;
 }
 
+static void destroyFlag() { createExplosion(ETBig, game.flagPos, FLAG_SIZE); }
+
+static bool checkFlagHit(Bullet *b) {
+    if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, game.flagPos.x,
+                  game.flagPos.y, FLAG_SIZE, FLAG_SIZE)) {
+        destroyBullet(b, true);
+        destroyFlag();
+        return true;
+    }
+    return false;
+}
+
 static void checkBulletCollision(Bullet *b) {
+    if (checkFlagHit(b))
+        return;
     if (checkBulletToBulletCollision(b))
         return;
     checkBulletHit(b);
