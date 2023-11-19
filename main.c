@@ -20,7 +20,7 @@ const int UI_TANK_TEXTURE_SIZE = 14;
 const int UI_TANK_SIZE = CELL_SIZE * 2;
 const int PLAYER1_START_COL = 4 * 4 + 4;
 const int PLAYER2_START_COL = 4 * 8 + 4;
-const int PLAYER_SPEED = 300;
+const int PLAYER_SPEED = 220;
 const int BASIC_ENEMY_SPEED = 140;
 const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
@@ -47,14 +47,13 @@ typedef struct {
 typedef struct {
     TankType type;
     Vector2 pos;
-    Vector2 speed;
     Direction direction;
     char texColOffset;
-    bool isMoving;
     char firedBulletCount;
     bool isFiring;
     TankStatus status;
     float spawningTime;
+    bool isMoving;
 } Tank;
 
 typedef struct {
@@ -466,45 +465,151 @@ static void fireBullet(Tank *t) {
     }
 }
 
+static bool checkTankToTankCollision(Tank *t) {
+    for (int i = 0; i < MAX_TANK_COUNT; i++) {
+        Tank *tank = &game.tanks[i];
+        if (t == tank || tank->status != TSActive)
+            continue;
+        if (collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, tank->pos.x,
+                      tank->pos.y, TANK_SIZE, TANK_SIZE))
+            return true;
+    }
+    return false;
+}
+
+static bool checkTankCollision(Tank *tank) {
+    switch (tank->direction) {
+    case DRight: {
+        int startRow = ((int)tank->pos.y) / CELL_SIZE;
+        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+        int col = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+        for (int r = startRow; r <= endRow; r++) {
+            CellType cellType = game.field[r][col].type;
+            if (!game.cellSpecs[cellType].isPassable) {
+                tank->pos.x = game.field[r][col].pos.x - TANK_SIZE;
+                return true;
+            }
+        }
+        return false;
+    }
+    case DLeft: {
+        int startRow = ((int)tank->pos.y) / CELL_SIZE;
+        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+        int col = ((int)tank->pos.x) / CELL_SIZE;
+        for (int r = startRow; r <= endRow; r++) {
+            CellType cellType = game.field[r][col].type;
+            if (!game.cellSpecs[cellType].isPassable) {
+                tank->pos.x = game.field[r][col].pos.x + CELL_SIZE;
+                return true;
+            }
+        }
+        return false;
+    }
+    case DUp: {
+        int startCol = ((int)tank->pos.x) / CELL_SIZE;
+        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+        int row = ((int)(tank->pos.y)) / CELL_SIZE;
+        for (int c = startCol; c <= endCol; c++) {
+            CellType cellType = game.field[row][c].type;
+            if (!game.cellSpecs[cellType].isPassable) {
+                tank->pos.y = game.field[row][c].pos.y + CELL_SIZE;
+                return true;
+            }
+        }
+        return false;
+    }
+    case DDown: {
+        int startCol = ((int)tank->pos.x) / CELL_SIZE;
+        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+        int row = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+        for (int c = startCol; c <= endCol; c++) {
+            CellType cellType = game.field[row][c].type;
+            if (!game.cellSpecs[cellType].isPassable) {
+                tank->pos.y = game.field[row][c].pos.y - TANK_SIZE;
+                return true;
+            }
+        }
+        return false;
+    }
+    }
+}
+
+static int snap(int x) {
+    int x1 = (x / SNAP_TO) * SNAP_TO;
+    int x2 = x1 + SNAP_TO;
+    return (x - x1 < x2 - x) ? x1 : x2;
+}
+
 static void handleCommand(Tank *t, Command cmd) {
     if (cmd.fire) {
         fireBullet(t);
     } else {
         finishFire(t);
     }
-    if (t->isMoving)
-        return;
-    t->speed.x = t->speed.y = 0;
+    t->isMoving = cmd.move;
     if (!cmd.move)
         return;
-    t->direction = cmd.direction;
-    t->isMoving = true;
-    int speed = game.tankSpecs[t->type].speed;
-    switch (cmd.direction) {
-    case DRight:
-        t->speed.x = speed;
-        break;
-    case DLeft:
-        t->speed.x = -speed;
-        break;
-    case DUp:
-        t->speed.y = -speed;
-        break;
-    case DDown:
-        t->speed.y = speed;
-        break;
+    t->texColOffset = (t->texColOffset + 1) % 2;
+    Vector2 prevPos = t->pos;
+    if (t->direction == cmd.direction) {
+        int delta = game.frameTime * game.tankSpecs[t->type].speed;
+        switch (t->direction) {
+        case DLeft:
+            t->pos.x -= delta;
+            break;
+        case DRight:
+            t->pos.x += delta;
+            break;
+        case DUp:
+            t->pos.y -= delta;
+            break;
+        case DDown:
+            t->pos.y += delta;
+            break;
+        }
+    } else if (((t->direction == DRight && cmd.direction == DLeft) ||
+                (t->direction == DLeft && cmd.direction == DRight)) ||
+               ((t->direction == DUp && cmd.direction == DDown) ||
+                (t->direction == DDown && cmd.direction == DUp))) {
+        t->direction = cmd.direction;
+        return;
+    } else {
+        switch (t->direction) {
+        case DLeft:
+        case DRight:
+            t->pos.x = snap((int)t->pos.x);
+            break;
+        case DUp:
+        case DDown:
+            t->pos.y = snap((int)t->pos.y);
+            break;
+        }
     }
+    if (checkTankToTankCollision(t)) {
+        t->pos = prevPos;
+        t->isMoving = false;
+    } else {
+        if (checkTankCollision(t)) {
+            t->isMoving = false;
+        }
+    }
+    t->direction = cmd.direction;
 }
+
+static float randomFloat() { return (float)rand() / (float)RAND_MAX; }
+
+static bool randomTrue(float trueChance) { return randomFloat() < trueChance; }
 
 static void handleTankAI(Tank *t) {
     static Direction dirs[] = {DDown,  DDown, DDown, DDown, DRight,
                                DRight, DLeft, DLeft, DUp};
     Command cmd = {};
-    cmd.fire = rand() % 100 == 0;
-    if (!t->isMoving || (rand() % 100 == 0)) {
-        t->isMoving = false;
-        cmd.move = true;
-        cmd.direction = dirs[rand() % ASIZE(dirs)];
+    cmd.fire = randomTrue(0.01f);
+    cmd.move = t->isMoving ? randomTrue(0.995f) : randomTrue(0.08f);
+    if (cmd.move) {
+        cmd.direction = (t->isMoving && randomTrue(0.99f))
+                            ? t->direction
+                            : dirs[rand() % ASIZE(dirs)];
     }
     handleCommand(t, cmd);
 }
@@ -668,137 +773,6 @@ static void checkBulletCollision(Bullet *b) {
     }
 }
 
-static bool checkTankToTankCollision(Tank *t) {
-    for (int i = 0; i < MAX_TANK_COUNT; i++) {
-        Tank *tank = &game.tanks[i];
-        if (t == tank || tank->status != TSActive)
-            continue;
-        if (collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, tank->pos.x,
-                      tank->pos.y, TANK_SIZE, TANK_SIZE))
-            return true;
-    }
-    return false;
-}
-
-static void checkTankCollision(Tank *tank) {
-    switch (tank->direction) {
-    case DRight: {
-        int startRow = ((int)tank->pos.y) / CELL_SIZE;
-        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
-        int col = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
-        for (int r = startRow; r <= endRow; r++) {
-            CellType cellType = game.field[r][col].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->isMoving = false;
-                tank->pos.x = game.field[r][col].pos.x - TANK_SIZE;
-            }
-        }
-        return;
-    }
-    case DLeft: {
-        int startRow = ((int)tank->pos.y) / CELL_SIZE;
-        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
-        int col = ((int)tank->pos.x) / CELL_SIZE;
-        for (int r = startRow; r <= endRow; r++) {
-            CellType cellType = game.field[r][col].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->isMoving = false;
-                tank->pos.x = game.field[r][col].pos.x + CELL_SIZE;
-            }
-        }
-        return;
-    }
-    case DUp: {
-        int startCol = ((int)tank->pos.x) / CELL_SIZE;
-        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
-        int row = ((int)(tank->pos.y)) / CELL_SIZE;
-        for (int c = startCol; c <= endCol; c++) {
-            CellType cellType = game.field[row][c].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->isMoving = false;
-                tank->pos.y = game.field[row][c].pos.y + CELL_SIZE;
-            }
-        }
-        return;
-    }
-    case DDown: {
-        int startCol = ((int)tank->pos.x) / CELL_SIZE;
-        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
-        int row = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
-        for (int c = startCol; c <= endCol; c++) {
-            CellType cellType = game.field[row][c].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->isMoving = false;
-                tank->pos.y = game.field[row][c].pos.y - TANK_SIZE;
-            }
-        }
-        return;
-    }
-    }
-}
-
-static void updateTankState(Tank *t) {
-    if (!t->isMoving)
-        return;
-    t->texColOffset = (t->texColOffset + 1) % 2;
-    Vector2 move = {};
-    switch (t->direction) {
-    case DLeft: {
-        int toSnap = ((int)t->pos.x) % SNAP_TO;
-        int toMove = game.frameTime * -t->speed.x;
-        if (toSnap && toSnap <= toMove) {
-            move.x = -toSnap;
-            t->isMoving = game.tankSpecs[t->type].isEnemy;
-        } else {
-            move.x = -toMove;
-        }
-        break;
-    }
-    case DRight: {
-        int toSnap = SNAP_TO - ((int)t->pos.x) % SNAP_TO;
-        int toMove = game.frameTime * t->speed.x;
-        if (toSnap <= toMove) {
-            move.x = toSnap;
-            t->isMoving = game.tankSpecs[t->type].isEnemy;
-        } else {
-            move.x = toMove;
-        }
-        break;
-    }
-    case DUp: {
-        int toSnap = ((int)t->pos.y) % SNAP_TO;
-        int toMove = game.frameTime * -t->speed.y;
-        if (toSnap && toSnap <= toMove) {
-            move.y = -toSnap;
-            t->isMoving = game.tankSpecs[t->type].isEnemy;
-        } else {
-            move.y = -toMove;
-        }
-        break;
-    }
-    case DDown: {
-        int toSnap = SNAP_TO - ((int)t->pos.y) % SNAP_TO;
-        int toMove = game.frameTime * t->speed.y;
-        if (toSnap <= toMove) {
-            move.y = toSnap;
-            t->isMoving = game.tankSpecs[t->type].isEnemy;
-        } else {
-            move.y = toMove;
-        }
-        break;
-    }
-    }
-    t->pos.x += move.x;
-    t->pos.y += move.y;
-    if (checkTankToTankCollision(t)) {
-        t->pos.x -= move.x;
-        t->pos.y -= move.y;
-        t->isMoving = false;
-    } else {
-        checkTankCollision(t);
-    }
-}
-
 static void updateBulletsState() {
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
@@ -841,7 +815,7 @@ static void updateGameState() {
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *tank = &game.tanks[i];
         if (tank->status == TSActive) {
-            updateTankState(&game.tanks[i]);
+            // updateTankState(&game.tanks[i]);
         } else if (tank->status == TSSpawning) {
             tank->spawningTime += game.frameTime;
             if (tank->spawningTime >= SPAWNING_TIME) {
