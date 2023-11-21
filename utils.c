@@ -12,7 +12,8 @@ typedef struct {
 Buffer readFile(const char *filename) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
-        return (Buffer){};
+        fprintf(stderr, "Cannot open file: %s", filename);
+        exit(1);
     }
     Buffer res = {};
     fseek(f, 0, SEEK_END);

@@ -17,6 +17,7 @@ const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int FLAG_SIZE = TANK_SIZE;
 const int TANK_TEXTURE_SIZE = 28;
+const int UI_DIGIT_TEXTURE_SIZE = 8;
 const int UI_TANK_TEXTURE_SIZE = 14;
 const int UI_TANK_SIZE = CELL_SIZE * 2;
 const int PLAYER1_START_COL = 4 * 4 + 4;
@@ -137,6 +138,7 @@ typedef struct {
     Texture2D spawningTank;
     Texture2D uiTank;
     Texture2D uiFlag;
+    Texture2D digits;
 } Textures;
 
 typedef struct {
@@ -155,6 +157,7 @@ typedef struct {
     char activeEnemyCount;
     char pendingEnemyCount;
     char maxActiveEnemyCount;
+    char stage;
     UIElement uiElements[UIMax];
 } Game;
 
@@ -299,8 +302,28 @@ static void drawUIElements() {
     }
 }
 
+static void drawDigit(char digit, Vector2 pos) {
+    const int w = UI_DIGIT_TEXTURE_SIZE;
+    Texture2D *tex = &game.textures.digits;
+    DrawTexturePro(*tex, (Rectangle){(digit % 5) * w, (digit / 5) * w, w, w},
+                   (Rectangle){pos.x, pos.y, w * 4, w * 4}, (Vector2){}, 0,
+                   WHITE);
+}
+
+static void drawStageNumber() {
+    char lowDigit = game.stage % 10;
+    char highDigit = game.stage / 10;
+    drawDigit(lowDigit,
+              (Vector2){(16 * 4 - 4) * CELL_SIZE, (14 * 4 - 8) * CELL_SIZE});
+    if (highDigit) {
+        drawDigit(highDigit, (Vector2){(16 * 4 - 6) * CELL_SIZE,
+                                       (14 * 4 - 8) * CELL_SIZE});
+    }
+}
+
 static void drawUI() {
     drawUITanks();
+    drawStageNumber();
     drawUIElements();
 }
 
@@ -316,6 +339,7 @@ static void drawGame() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.digits = LoadTexture("textures/digits.png");
     game.textures.uiFlag = LoadTexture("textures/uiFlag.png");
     game.textures.uiTank = LoadTexture("textures/uiTank.png");
     game.textures.spawningTank = LoadTexture("textures/born.png");
@@ -359,8 +383,10 @@ static void loadTextures() {
         LoadTexture("textures/big_explosion_5.png");
 }
 
-static void loadField(const char *filename) {
-    Buffer buf = readFile("levels/1.level");
+static void loadStage(int stage) {
+    char filename[50];
+    snprintf(filename, 50, "levels/%d.stage", stage);
+    Buffer buf = readFile(filename);
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             game.field[i][j].texRow = i - 2 % 4;
@@ -402,7 +428,8 @@ static void initGame() {
                        .pos = (Vector2){j * CELL_SIZE, i * CELL_SIZE}};
         }
     }
-    loadField("levels/1.level");
+    game.stage = 10;
+    loadStage(game.stage);
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
                                           .texCol = 0,
                                           .speed = PLAYER_SPEED};
