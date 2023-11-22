@@ -21,6 +21,10 @@ const int UI_TANK_TEXTURE_SIZE = 14;
 const int UI_TANK_SIZE = CELL_SIZE * 2;
 const int PLAYER1_START_COL = 4 * 4 + 4;
 const int PLAYER2_START_COL = 4 * 8 + 4;
+const Vector2 PLAYER1_START_POS = {CELL_SIZE * PLAYER1_START_COL,
+                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
+const Vector2 PLAYER2_START_POS = {CELL_SIZE * PLAYER2_START_COL,
+                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
 const int PLAYER_SPEED = 220;
 const int BASIC_ENEMY_SPEED = 140;
 const int MAX_ENEMY_COUNT = 20;
@@ -525,6 +529,12 @@ static void initUIElements() {
     }
 }
 
+static void spawnPlayer(Tank *t) {
+    t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
+    t->direction = DUp;
+    t->status = TSActive;
+}
+
 static void initGame() {
     loadTextures();
     for (int i = 0; i < FIELD_ROWS; i++) {
@@ -548,20 +558,15 @@ static void initGame() {
                                         .isEnemy = true};
     game.tanks[0] = (Tank){
         .type = TPlayer1,
-        .pos = (Vector2){CELL_SIZE * PLAYER1_START_COL,
-                         CELL_SIZE * (FIELD_ROWS - 4 - 2)},
-        .direction = DUp,
-        .status = TSActive,
         .lifes = 2,
     };
+    spawnPlayer(&game.tanks[0]);
     game.tanks[1] = (Tank){
         .type = TPlayer2,
-        .pos = (Vector2){CELL_SIZE * PLAYER2_START_COL,
-                         CELL_SIZE * (FIELD_ROWS - 4 - 2)},
-        .direction = DUp,
-        .status = TSPending,
         .lifes = 2,
+        .status = TSPending,
     };
+    // spawnPlayer(&game.tanks[1]);
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
                                    FIELD_COLS - 8 - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
@@ -868,6 +873,7 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
 
 static void destroyTank(Tank *t) {
     t->status = TSDead;
+    t->lifes--;
     if (game.tankSpecs[t->type].isEnemy) {
         game.activeEnemyCount--;
     }
@@ -885,6 +891,16 @@ static void checkBulletHit(Bullet *b) {
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             destroyBullet(b, true);
             destroyTank(t);
+            if (!game.tankSpecs[t->type].isEnemy) {
+                if (t->lifes == -1) {
+                    t->lifes = 2;
+                }
+                spawnPlayer(t);
+                game.uiElements[UIP1Lifes].textureSrc =
+                    digitTextureRect(game.tanks[0].lifes);
+                game.uiElements[UIP2Lifes].textureSrc =
+                    digitTextureRect(game.tanks[1].lifes);
+            }
             break;
         }
     }
