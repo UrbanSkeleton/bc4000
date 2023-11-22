@@ -45,6 +45,8 @@ typedef enum {
     UIP1Lifes,
     UIP2Tank,
     UIP2Lifes,
+    UIStageLowDigit,
+    UIStageHiDigit,
     UIMax
 } UIElementType;
 
@@ -318,27 +320,8 @@ static Rectangle digitTextureRect(char digit) {
     return (Rectangle){(digit % 5) * w, (digit / 5) * w, w, w};
 }
 
-static void drawDigit(char digit, Vector2 pos) {
-    Texture2D *tex = &game.textures.digits;
-    DrawTexturePro(*tex, digitTextureRect(digit),
-                   (Rectangle){pos.x, pos.y, 8 * 4, 8 * 4}, (Vector2){}, 0,
-                   WHITE);
-}
-
-static void drawStageNumber() {
-    char lowDigit = game.stage % 10;
-    char highDigit = game.stage / 10;
-    drawDigit(lowDigit,
-              (Vector2){(16 * 4 - 4) * CELL_SIZE, (14 * 4 - 8) * CELL_SIZE});
-    if (highDigit) {
-        drawDigit(highDigit, (Vector2){(16 * 4 - 6) * CELL_SIZE,
-                                       (14 * 4 - 8) * CELL_SIZE});
-    }
-}
-
 static void drawUI() {
     drawUITanks();
-    drawStageNumber();
     drawUIElements();
 }
 
@@ -481,42 +464,65 @@ static void initUIElements() {
                         },
                     .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                     .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
-    if (game.tanks[1].status != TSActive) {
-        return;
-    }
-    game.uiElements[UIPlayer2] =
-        (UIElement){.isVisible = true,
-                    .texture = &game.textures.ui,
-                    .textureSrc = (Rectangle){56, 0, 28, 14},
-                    .pos =
-                        (Vector2){
-                            (14 * 4 + 2) * CELL_SIZE + 8,
-                            ((9 * 4) * CELL_SIZE),
-                        },
-                    .size = (Vector2){14 * 4, 14 * 2},
-                    .drawSize = (Vector2){14 * 4, 14 * 2}};
-    game.uiElements[UIP2Tank] =
-        (UIElement){.isVisible = true,
-                    .texture = &game.textures.ui,
-                    .textureSrc = (Rectangle){14, 0, 14, 14},
-                    .pos =
-                        (Vector2){
-                            (14 * 4 + 2) * CELL_SIZE,
-                            ((9 * 4 + 2) * CELL_SIZE),
-                        },
-                    .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
-                    .drawSize = (Vector2){14 * 2, 14 * 2}};
-    game.uiElements[UIP2Lifes] =
+    game.uiElements[UIStageLowDigit] =
         (UIElement){.isVisible = true,
                     .texture = &game.textures.digits,
-                    .textureSrc = digitTextureRect(game.tanks[1].lifes),
+                    .textureSrc = digitTextureRect(game.stage % 10),
                     .pos =
                         (Vector2){
-                            (15 * 4) * CELL_SIZE,
-                            ((9 * 4 + 2) * CELL_SIZE),
+                            (16 * 4 - 4) * CELL_SIZE,
+                            (14 * 4 - 8) * CELL_SIZE,
                         },
                     .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                     .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
+    if (game.stage / 10) {
+        game.uiElements[UIStageHiDigit] =
+            (UIElement){.isVisible = true,
+                        .texture = &game.textures.digits,
+                        .textureSrc = digitTextureRect(game.stage / 10),
+                        .pos =
+                            (Vector2){
+                                (16 * 4 - 6) * CELL_SIZE,
+                                (14 * 4 - 8) * CELL_SIZE,
+                            },
+                        .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
+                        .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
+    }
+    if (game.tanks[1].status == TSActive) {
+        game.uiElements[UIPlayer2] =
+            (UIElement){.isVisible = true,
+                        .texture = &game.textures.ui,
+                        .textureSrc = (Rectangle){56, 0, 28, 14},
+                        .pos =
+                            (Vector2){
+                                (14 * 4 + 2) * CELL_SIZE + 8,
+                                ((9 * 4) * CELL_SIZE),
+                            },
+                        .size = (Vector2){14 * 4, 14 * 2},
+                        .drawSize = (Vector2){14 * 4, 14 * 2}};
+        game.uiElements[UIP2Tank] =
+            (UIElement){.isVisible = true,
+                        .texture = &game.textures.ui,
+                        .textureSrc = (Rectangle){14, 0, 14, 14},
+                        .pos =
+                            (Vector2){
+                                (14 * 4 + 2) * CELL_SIZE,
+                                ((9 * 4 + 2) * CELL_SIZE),
+                            },
+                        .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
+                        .drawSize = (Vector2){14 * 2, 14 * 2}};
+        game.uiElements[UIP2Lifes] =
+            (UIElement){.isVisible = true,
+                        .texture = &game.textures.digits,
+                        .textureSrc = digitTextureRect(game.tanks[1].lifes),
+                        .pos =
+                            (Vector2){
+                                (15 * 4) * CELL_SIZE,
+                                ((9 * 4 + 2) * CELL_SIZE),
+                            },
+                        .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
+                        .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
+    }
 }
 
 static void initGame() {
@@ -528,7 +534,7 @@ static void initGame() {
                        .pos = (Vector2){j * CELL_SIZE, i * CELL_SIZE}};
         }
     }
-    game.stage = 1;
+    game.stage = 10;
     loadStage(game.stage);
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
                                           .texCol = 0,
