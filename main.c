@@ -18,7 +18,8 @@ const int CELL_SIZE = 16;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int FLAG_SIZE = TANK_SIZE;
-const int TANK_TEXTURE_SIZE = 28;
+const int TANK_TEXTURE_SIZE = 16;
+const int SPAWN_TEXTURE_SIZE = 32;
 const int UI_TANK_TEXTURE_SIZE = 14;
 const int UI_TANK_SIZE = CELL_SIZE * 2;
 const int PLAYER1_START_COL = 4 * 4 + 4;
@@ -28,7 +29,9 @@ const Vector2 PLAYER1_START_POS = {CELL_SIZE * PLAYER1_START_COL,
 const Vector2 PLAYER2_START_POS = {CELL_SIZE * PLAYER2_START_COL,
                                    CELL_SIZE *(FIELD_ROWS - 4 - 2)};
 const int PLAYER_SPEED = 220;
-const int BASIC_ENEMY_SPEED = 140;
+const int SLOW_ENEMY_SPEED = 140;
+const int FAST_ENEMY_SPEED = 240;
+const int NORMAL_ENEMY_SPEED = 170;
 const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 100;
@@ -40,7 +43,15 @@ const float BIG_EXPLOSION_TTL = 0.4f;
 const float ENEMY_SPAWN_INTERVAL = 2.0f;
 const float SPAWNING_TIME = 1.0f;
 
-typedef enum { TPlayer1, TPlayer2, TBasic, TMax } TankType;
+typedef enum {
+    TPlayer1,
+    TPlayer2,
+    TBasic,
+    TFast,
+    TPower,
+    TArmor,
+    TMax
+} TankType;
 typedef enum { TSPending, TSSpawning, TSActive, TSDead } TankStatus;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
 typedef enum {
@@ -67,7 +78,7 @@ typedef struct {
 
 typedef struct {
     Texture2D *texture;
-    char texCol;
+    char texRow;
     int speed;
     bool isEnemy;
 } TankSpec;
@@ -212,12 +223,12 @@ static void drawForest() {
 }
 
 static void drawTank(Tank *tank) {
-    static char textureRows[4] = {3, 1, 0, 2};
+    static char textureRows[4] = {1, 3, 0, 2};
     Texture2D *tex = game.tankSpecs[tank->type].texture;
-    int texX = (game.tankSpecs[tank->type].texCol + tank->texColOffset) *
+    int texX = (textureRows[tank->direction] * 2 + tank->texColOffset) *
                TANK_TEXTURE_SIZE;
-    int texY = textureRows[tank->direction] * TANK_TEXTURE_SIZE;
-    int drawSize = TANK_TEXTURE_SIZE * 2;
+    int texY = game.tankSpecs[tank->type].texRow * TANK_TEXTURE_SIZE;
+    int drawSize = TANK_TEXTURE_SIZE * 4;
     int drawOffset = (TANK_SIZE - drawSize) / 2;
     DrawTexturePro(
         *tex, (Rectangle){texX, texY, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
@@ -234,7 +245,7 @@ static void drawSpawningTank(Tank *tank) {
     if (i >= ASIZE(textureCols))
         i = ASIZE(textureCols) - 1;
     int texX = textureCols[i] * textureSize;
-    int drawSize = TANK_TEXTURE_SIZE * 2;
+    int drawSize = SPAWN_TEXTURE_SIZE * 2;
     DrawTexturePro(*tex, (Rectangle){texX, 0, textureSize, textureSize},
                    (Rectangle){tank->pos.x, tank->pos.y, drawSize, drawSize},
                    (Vector2){}, 0, WHITE);
@@ -366,8 +377,8 @@ static void loadTextures() {
     game.textures.blank = LoadTexture("textures/blank.png");
     game.cellSpecs[CTBlank] =
         (CellSpec){.texture = &game.textures.blank, .isPassable = true};
-    game.textures.player1Tank = LoadTexture("textures/tank1.png");
-    game.textures.player2Tank = LoadTexture("textures/tank2.png");
+    game.textures.player1Tank = LoadTexture("textures/player1.png");
+    game.textures.player2Tank = LoadTexture("textures/player2.png");
     game.textures.bullet = LoadTexture("textures/bullet.png");
     game.textures.bulletExplosions[0] =
         LoadTexture("textures/bullet_explosion_1.png");
@@ -590,14 +601,26 @@ static void initGame() {
     game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
                              CELL_SIZE * (FIELD_ROWS - 4 - 2)};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
-                                          .texCol = 0,
+                                          .texRow = 0,
                                           .speed = PLAYER_SPEED};
     game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
-                                          .texCol = 0,
+                                          .texRow = 0,
                                           .speed = PLAYER_SPEED};
     game.tankSpecs[TBasic] = (TankSpec){.texture = &game.textures.enemies,
-                                        .texCol = 0,
-                                        .speed = BASIC_ENEMY_SPEED,
+                                        .texRow = 0,
+                                        .speed = SLOW_ENEMY_SPEED,
+                                        .isEnemy = true};
+    game.tankSpecs[TFast] = (TankSpec){.texture = &game.textures.enemies,
+                                       .texRow = 1,
+                                       .speed = FAST_ENEMY_SPEED,
+                                       .isEnemy = true};
+    game.tankSpecs[TPower] = (TankSpec){.texture = &game.textures.enemies,
+                                        .texRow = 2,
+                                        .speed = NORMAL_ENEMY_SPEED,
+                                        .isEnemy = true};
+    game.tankSpecs[TArmor] = (TankSpec){.texture = &game.textures.enemies,
+                                        .texRow = 3,
+                                        .speed = NORMAL_ENEMY_SPEED,
                                         .isEnemy = true};
 
     initStage(1);
