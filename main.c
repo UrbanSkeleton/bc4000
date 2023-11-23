@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include <assert.h>
+#include <string.h>
 
 #include "utils.c"
 
@@ -8,6 +9,7 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
+const int STAGE_COUNT = 2;
 const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
 const int FIELD_COLS = 64;
@@ -535,8 +537,8 @@ static void spawnPlayer(Tank *t) {
     t->status = TSActive;
 }
 
-static void initGame() {
-    loadTextures();
+static void initStage(char stage) {
+    game.stage = stage;
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             game.field[i][j] =
@@ -544,18 +546,7 @@ static void initGame() {
                        .pos = (Vector2){j * CELL_SIZE, i * CELL_SIZE}};
         }
     }
-    game.stage = 10;
     loadStage(game.stage);
-    game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
-                                          .texCol = 0,
-                                          .speed = PLAYER_SPEED};
-    game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
-                                          .texCol = 0,
-                                          .speed = PLAYER_SPEED};
-    game.tankSpecs[TBasic] = (TankSpec){.texture = &game.textures.enemies,
-                                        .texCol = 0,
-                                        .speed = BASIC_ENEMY_SPEED,
-                                        .isEnemy = true};
     game.tanks[0] = (Tank){
         .type = TPlayer1,
         .lifes = 2,
@@ -566,7 +557,7 @@ static void initGame() {
         .lifes = 2,
         .status = TSPending,
     };
-    // spawnPlayer(&game.tanks[1]);
+    // spawnPlayer(&game.tanks[e1]);
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
                                    FIELD_COLS - 8 - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
@@ -577,10 +568,17 @@ static void initGame() {
             .status = TSPending,
         };
     }
+    memset(game.bullets, 0, sizeof(game.bullets));
+    memset(game.explosions, 0, sizeof(game.explosions));
     game.pendingEnemyCount = MAX_ENEMY_COUNT;
     game.maxActiveEnemyCount = 4;
-    game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
-                             CELL_SIZE * (FIELD_ROWS - 4 - 2)};
+    game.timeSinceSpawn = ENEMY_SPAWN_INTERVAL;
+    game.activeEnemyCount = 0;
+    initUIElements();
+}
+
+static void initGame() {
+    loadTextures();
     game.explosionAnimations[ETBullet] =
         (Animation){.duration = BULLET_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bulletExplosions),
@@ -589,8 +587,20 @@ static void initGame() {
         (Animation){.duration = BIG_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bigExplosions),
                     .textures = &game.textures.bigExplosions[0]};
-    game.timeSinceSpawn = ENEMY_SPAWN_INTERVAL;
-    initUIElements();
+    game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
+                             CELL_SIZE * (FIELD_ROWS - 4 - 2)};
+    game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
+                                          .texCol = 0,
+                                          .speed = PLAYER_SPEED};
+    game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
+                                          .texCol = 0,
+                                          .speed = PLAYER_SPEED};
+    game.tankSpecs[TBasic] = (TankSpec){.texture = &game.textures.enemies,
+                                        .texCol = 0,
+                                        .speed = BASIC_ENEMY_SPEED,
+                                        .isEnemy = true};
+
+    initStage(1);
 }
 
 static void finishFire(Tank *t) {
@@ -871,6 +881,29 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
     }
 }
 
+static void checkPlayerKill(Tank *t) {
+    if (!game.tankSpecs[t->type].isEnemy) {
+        if (t->lifes == -1) {
+            t->lifes = 2;
+        }
+        spawnPlayer(t);
+        game.uiElements[UIP1Lifes].textureSrc =
+            digitTextureRect(game.tanks[0].lifes);
+        game.uiElements[UIP2Lifes].textureSrc =
+            digitTextureRect(game.tanks[1].lifes);
+    }
+}
+
+static void checkStageEnd() {
+    if (!game.activeEnemyCount) {
+        if (game.stage == STAGE_COUNT) {
+            initStage(1);
+        } else {
+            initStage(game.stage + 1);
+        }
+    }
+}
+
 static void destroyTank(Tank *t) {
     t->status = TSDead;
     t->lifes--;
@@ -878,6 +911,7 @@ static void destroyTank(Tank *t) {
         game.activeEnemyCount--;
     }
     createExplosion(ETBig, t->pos, TANK_SIZE);
+    checkPlayerKill(t);
 }
 
 static void checkBulletHit(Bullet *b) {
@@ -891,16 +925,6 @@ static void checkBulletHit(Bullet *b) {
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             destroyBullet(b, true);
             destroyTank(t);
-            if (!game.tankSpecs[t->type].isEnemy) {
-                if (t->lifes == -1) {
-                    t->lifes = 2;
-                }
-                spawnPlayer(t);
-                game.uiElements[UIP1Lifes].textureSrc =
-                    digitTextureRect(game.tanks[0].lifes);
-                game.uiElements[UIP2Lifes].textureSrc =
-                    digitTextureRect(game.tanks[1].lifes);
-            }
             break;
         }
     }
@@ -1022,6 +1046,7 @@ static void updateGameState() {
         }
     }
     spawnTanks();
+    checkStageEnd();
 }
 
 int main(void) {
