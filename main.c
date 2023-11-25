@@ -29,14 +29,12 @@ const Vector2 PLAYER1_START_POS = {CELL_SIZE * PLAYER1_START_COL,
 const Vector2 PLAYER2_START_POS = {CELL_SIZE * PLAYER2_START_COL,
                                    CELL_SIZE *(FIELD_ROWS - 4 - 2)};
 const int PLAYER_SPEED = 220;
-const int SLOW_ENEMY_SPEED = 140;
-const int FAST_ENEMY_SPEED = 240;
-const int NORMAL_ENEMY_SPEED = 170;
+const short ENEMY_SPEEDS[3] = {140, 170, 240};
 const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 100;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
-const int BULLET_SPEED = 400;
+const short BULLET_SPEEDS[3] = {400, 450, 500};
 const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
@@ -68,6 +66,11 @@ typedef enum {
 } UIElementType;
 
 typedef struct {
+    int totalScore;
+    char kills[TMax];
+} PlayerScore;
+
+typedef struct {
     Texture2D *texture;
     Rectangle textureSrc;
     Vector2 pos;
@@ -78,9 +81,11 @@ typedef struct {
 
 typedef struct {
     Texture2D *texture;
-    char texRow;
-    int speed;
+    short speed;
+    short bulletSpeed;
     bool isEnemy;
+    short points;
+    char texRow;
 } TankSpec;
 
 typedef struct {
@@ -188,6 +193,7 @@ typedef struct {
     char maxActiveEnemyCount;
     char stage;
     UIElement uiElements[UIMax];
+    PlayerScore playerScores[2];
 } Game;
 
 static Game game;
@@ -602,25 +608,35 @@ static void initGame() {
                              CELL_SIZE * (FIELD_ROWS - 4 - 2)};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
                                           .texRow = 0,
+                                          .bulletSpeed = BULLET_SPEEDS[0],
                                           .speed = PLAYER_SPEED};
     game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
                                           .texRow = 0,
+                                          .bulletSpeed = BULLET_SPEEDS[0],
                                           .speed = PLAYER_SPEED};
     game.tankSpecs[TBasic] = (TankSpec){.texture = &game.textures.enemies,
                                         .texRow = 0,
-                                        .speed = SLOW_ENEMY_SPEED,
+                                        .speed = ENEMY_SPEEDS[0],
+                                        .bulletSpeed = BULLET_SPEEDS[0],
+                                        .points = 100,
                                         .isEnemy = true};
     game.tankSpecs[TFast] = (TankSpec){.texture = &game.textures.enemies,
                                        .texRow = 1,
-                                       .speed = FAST_ENEMY_SPEED,
+                                       .speed = ENEMY_SPEEDS[2],
+                                       .bulletSpeed = BULLET_SPEEDS[1],
+                                       .points = 200,
                                        .isEnemy = true};
     game.tankSpecs[TPower] = (TankSpec){.texture = &game.textures.enemies,
                                         .texRow = 2,
-                                        .speed = NORMAL_ENEMY_SPEED,
+                                        .speed = ENEMY_SPEEDS[1],
+                                        .bulletSpeed = BULLET_SPEEDS[2],
+                                        .points = 300,
                                         .isEnemy = true};
     game.tankSpecs[TArmor] = (TankSpec){.texture = &game.textures.enemies,
                                         .texRow = 3,
-                                        .speed = NORMAL_ENEMY_SPEED,
+                                        .speed = ENEMY_SPEEDS[1],
+                                        .bulletSpeed = BULLET_SPEEDS[1],
+                                        .points = 400,
                                         .isEnemy = true};
 
     initStage(1);
@@ -645,26 +661,27 @@ static void fireBullet(Tank *t) {
         b->type = BTPlayer;
         b->direction = t->direction;
         b->tank = t;
+        short bulletSpeed = game.tankSpecs[t->type].bulletSpeed;
         switch (b->direction) {
         case DRight:
             b->pos = (Vector2){t->pos.x + TANK_SIZE - BULLET_SIZE,
                                t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
-            b->speed = (Vector2){BULLET_SPEED, 0};
+            b->speed = (Vector2){bulletSpeed, 0};
             break;
         case DLeft:
             b->pos =
                 (Vector2){t->pos.x, t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
-            b->speed = (Vector2){-BULLET_SPEED, 0};
+            b->speed = (Vector2){-bulletSpeed, 0};
             break;
         case DUp:
             b->pos =
                 (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2, t->pos.y};
-            b->speed = (Vector2){0, -BULLET_SPEED};
+            b->speed = (Vector2){0, -bulletSpeed};
             break;
         case DDown:
             b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
                                t->pos.y + TANK_SIZE - BULLET_SIZE};
-            b->speed = (Vector2){0, BULLET_SPEED};
+            b->speed = (Vector2){0, bulletSpeed};
             break;
         }
         break;
@@ -934,7 +951,6 @@ static void destroyTank(Tank *t) {
         game.activeEnemyCount--;
     }
     createExplosion(ETBig, t->pos, TANK_SIZE);
-    checkPlayerKill(t);
 }
 
 static void checkBulletHit(Bullet *b) {
@@ -948,6 +964,12 @@ static void checkBulletHit(Bullet *b) {
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             destroyBullet(b, true);
             destroyTank(t);
+            checkPlayerKill(t);
+            if (!game.tankSpecs[b->tank->type].isEnemy) {
+                game.playerScores[b->tank->type].totalScore +=
+                    game.tankSpecs[t->type].points;
+                game.playerScores[b->tank->type].kills[t->type]++;
+            }
             break;
         }
     }
