@@ -21,6 +21,8 @@ const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int FLAG_SIZE = TANK_SIZE;
 const int TANK_TEXTURE_SIZE = 16;
+const Vector2 POWER_UP_TEXTURE_SIZE = {30, 28};
+const int POWER_UP_SIZE = CELL_SIZE * 4;
 const int SPAWN_TEXTURE_SIZE = 32;
 const int UI_TANK_TEXTURE_SIZE = 14;
 const int UI_TANK_SIZE = CELL_SIZE * 2;
@@ -400,6 +402,32 @@ static void drawUI() {
     drawUIElements();
 }
 
+static void drawPowerUp(PowerUp *p) {
+    if (((long)(game.totalTime * 2)) % 2)
+        return;
+    Texture2D *tex = game.powerUpSpecs[p->type].texture;
+    Vector2 drawSize = {POWER_UP_TEXTURE_SIZE.x * 2,
+                        POWER_UP_TEXTURE_SIZE.y * 2};
+    Vector2 drawOffset = {(POWER_UP_SIZE - drawSize.x) / 2,
+                          (POWER_UP_SIZE - drawSize.y) / 2};
+    int texX = game.powerUpSpecs[p->type].texCol * POWER_UP_TEXTURE_SIZE.x;
+    DrawTexturePro(
+        *tex,
+        (Rectangle){texX, 0, POWER_UP_TEXTURE_SIZE.x, POWER_UP_TEXTURE_SIZE.y},
+        (Rectangle){p->pos.x + drawOffset.x, p->pos.y + drawOffset.y,
+                    drawSize.x, drawSize.y},
+        (Vector2){}, 0, WHITE);
+}
+
+static void drawPowerUps() {
+    for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
+        PowerUp *p = &game.powerUps[i];
+        if (p->isActive) {
+            drawPowerUp(p);
+        }
+    }
+}
+
 static void drawGame() {
     drawField();
     drawBullets();
@@ -407,6 +435,7 @@ static void drawGame() {
     drawFlag();
     drawForest();
     drawExplosions();
+    drawPowerUps();
     drawUI();
 }
 
@@ -1035,6 +1064,9 @@ static void destroyTank(Tank *t) {
     t->lifes--;
     if (game.tankSpecs[t->type].isEnemy) {
         game.activeEnemyCount--;
+    }
+    if (t->powerUp) {
+        t->powerUp->isActive = true;
     }
     createExplosion(ETBig, t->pos, TANK_SIZE);
 }
