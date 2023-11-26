@@ -2,6 +2,7 @@
 #include "raymath.h"
 #include <assert.h>
 #include <string.h>
+#include <time.h>
 
 #include "utils.c"
 
@@ -9,6 +10,7 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
+const int MAX_POWERUP_COUNT = 3;
 const int STAGE_COUNT = 2;
 const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
@@ -40,6 +42,27 @@ const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
 const float ENEMY_SPAWN_INTERVAL = 2.0f;
 const float SPAWNING_TIME = 1.0f;
+const int POWERUP_POSITIONS_COUNT = 16;
+const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
+    {(4 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
+    {(4 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
+    {(7 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
+    {(7 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
+
+    {(1 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
+    {(1 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
+    {(10 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
+    {(10 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
+
+    {(1 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
+    {(1 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
+    {(10 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
+    {(10 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
+
+    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
+    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
+    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
+    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE}};
 
 typedef enum {
     TPlayer1,
@@ -81,12 +104,34 @@ typedef struct {
 
 typedef struct {
     Texture2D *texture;
+    Texture2D *powerUpTexture;
     short speed;
     short bulletSpeed;
     bool isEnemy;
     short points;
     char texRow;
 } TankSpec;
+
+typedef enum {
+    PUGrenade,
+    PUHelmet,
+    PUShovel,
+    PUStar,
+    PUTank,
+    PUTimer,
+    PUMax,
+} PowerUpType;
+
+typedef struct {
+    Texture2D *texture;
+    int texCol;
+} PowerUpSpec;
+
+typedef struct {
+    PowerUpType type;
+    Vector2 pos;
+    bool isActive;
+} PowerUp;
 
 typedef struct {
     TankType type;
@@ -99,6 +144,7 @@ typedef struct {
     float spawningTime;
     bool isMoving;
     char lifes;
+    PowerUp *powerUp;
 } Tank;
 
 typedef struct {
@@ -166,6 +212,7 @@ typedef struct {
     Texture2D player1Tank;
     Texture2D player2Tank;
     Texture2D enemies;
+    Texture2D enemiesWithPowerUps;
     Texture2D bullet;
     Texture2D bulletExplosions[3];
     Texture2D bigExplosions[5];
@@ -173,6 +220,7 @@ typedef struct {
     Texture2D uiFlag;
     Texture2D ui;
     Texture2D digits;
+    Texture2D powerups;
 } Textures;
 
 typedef struct {
@@ -182,6 +230,7 @@ typedef struct {
     Bullet bullets[MAX_BULLET_COUNT];
     Vector2 flagPos;
     CellSpec cellSpecs[CTMax];
+    PowerUpSpec powerUpSpecs[PUMax];
     Animation explosionAnimations[ETMax];
     Explosion explosions[MAX_EXPLOSION_COUNT];
     Textures textures;
@@ -194,6 +243,7 @@ typedef struct {
     char stage;
     UIElement uiElements[UIMax];
     PlayerScore playerScores[2];
+    PowerUp powerUps[MAX_POWERUP_COUNT];
 } Game;
 
 static Game game;
@@ -230,7 +280,9 @@ static void drawForest() {
 
 static void drawTank(Tank *tank) {
     static char textureRows[4] = {1, 3, 0, 2};
-    Texture2D *tex = game.tankSpecs[tank->type].texture;
+    Texture2D *tex = !tank->powerUp || ((long)(game.totalTime * 8)) % 2
+                         ? game.tankSpecs[tank->type].texture
+                         : game.tankSpecs[tank->type].powerUpTexture;
     int texX = (textureRows[tank->direction] * 2 + tank->texColOffset) *
                TANK_TEXTURE_SIZE;
     int texY = game.tankSpecs[tank->type].texRow * TANK_TEXTURE_SIZE;
@@ -360,11 +412,14 @@ static void drawGame() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.powerups = LoadTexture("textures/powerup.png");
     game.textures.ui = LoadTexture("textures/ui.png");
     game.textures.digits = LoadTexture("textures/digits.png");
     game.textures.uiFlag = LoadTexture("textures/uiFlag.png");
     game.textures.spawningTank = LoadTexture("textures/born.png");
     game.textures.enemies = LoadTexture("textures/enemies.png");
+    game.textures.enemiesWithPowerUps =
+        LoadTexture("textures/enemies_with_powerups.png");
     game.textures.border = LoadTexture("textures/border.png");
     game.cellSpecs[CTBorder] =
         (CellSpec){.texture = &game.textures.border, .isSolid = true};
@@ -584,6 +639,18 @@ static void initStage(char stage) {
             .direction = DDown,
             .status = TSPending,
         };
+        if (i + 1 == 4)
+            game.tanks[i + 2].powerUp = &game.powerUps[0];
+        else if (i + 1 == 11)
+            game.tanks[i + 2].powerUp = &game.powerUps[1];
+        else if (i + 1 == 18)
+            game.tanks[i + 2].powerUp = &game.powerUps[2];
+    }
+    for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
+        game.powerUps[i] = (PowerUp){
+            .type = rand() % PUMax,
+            .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
+            .isActive = false};
     }
     memset(game.bullets, 0, sizeof(game.bullets));
     memset(game.explosions, 0, sizeof(game.explosions));
@@ -614,31 +681,50 @@ static void initGame() {
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
                                           .speed = PLAYER_SPEED};
-    game.tankSpecs[TBasic] = (TankSpec){.texture = &game.textures.enemies,
-                                        .texRow = 0,
-                                        .speed = ENEMY_SPEEDS[0],
-                                        .bulletSpeed = BULLET_SPEEDS[0],
-                                        .points = 100,
-                                        .isEnemy = true};
-    game.tankSpecs[TFast] = (TankSpec){.texture = &game.textures.enemies,
-                                       .texRow = 1,
-                                       .speed = ENEMY_SPEEDS[2],
-                                       .bulletSpeed = BULLET_SPEEDS[1],
-                                       .points = 200,
-                                       .isEnemy = true};
-    game.tankSpecs[TPower] = (TankSpec){.texture = &game.textures.enemies,
-                                        .texRow = 2,
-                                        .speed = ENEMY_SPEEDS[1],
-                                        .bulletSpeed = BULLET_SPEEDS[2],
-                                        .points = 300,
-                                        .isEnemy = true};
-    game.tankSpecs[TArmor] = (TankSpec){.texture = &game.textures.enemies,
-                                        .texRow = 3,
-                                        .speed = ENEMY_SPEEDS[1],
-                                        .bulletSpeed = BULLET_SPEEDS[1],
-                                        .points = 400,
-                                        .isEnemy = true};
-
+    game.tankSpecs[TBasic] =
+        (TankSpec){.texture = &game.textures.enemies,
+                   .powerUpTexture = &game.textures.enemiesWithPowerUps,
+                   .texRow = 0,
+                   .speed = ENEMY_SPEEDS[0],
+                   .bulletSpeed = BULLET_SPEEDS[0],
+                   .points = 100,
+                   .isEnemy = true};
+    game.tankSpecs[TFast] =
+        (TankSpec){.texture = &game.textures.enemies,
+                   .powerUpTexture = &game.textures.enemiesWithPowerUps,
+                   .texRow = 1,
+                   .speed = ENEMY_SPEEDS[2],
+                   .bulletSpeed = BULLET_SPEEDS[1],
+                   .points = 200,
+                   .isEnemy = true};
+    game.tankSpecs[TPower] =
+        (TankSpec){.texture = &game.textures.enemies,
+                   .powerUpTexture = &game.textures.enemiesWithPowerUps,
+                   .texRow = 2,
+                   .speed = ENEMY_SPEEDS[1],
+                   .bulletSpeed = BULLET_SPEEDS[2],
+                   .points = 300,
+                   .isEnemy = true};
+    game.tankSpecs[TArmor] =
+        (TankSpec){.texture = &game.textures.enemies,
+                   .powerUpTexture = &game.textures.enemiesWithPowerUps,
+                   .texRow = 3,
+                   .speed = ENEMY_SPEEDS[1],
+                   .bulletSpeed = BULLET_SPEEDS[1],
+                   .points = 400,
+                   .isEnemy = true};
+    game.powerUpSpecs[PUTank] =
+        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 0};
+    game.powerUpSpecs[PUTimer] =
+        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 1};
+    game.powerUpSpecs[PUShovel] =
+        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 2};
+    game.powerUpSpecs[PUGrenade] =
+        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 3};
+    game.powerUpSpecs[PUStar] =
+        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
+    game.powerUpSpecs[PUHelmet] =
+        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
     initStage(1);
 }
 
@@ -1095,6 +1181,8 @@ static void updateGameState() {
 }
 
 int main(void) {
+
+    srand(time(0));
 
     SetTraceLogLevel(LOG_NONE);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
