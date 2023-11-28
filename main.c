@@ -403,7 +403,7 @@ static void drawUI() {
 }
 
 static void drawPowerUp(PowerUp *p) {
-    if (((long)(game.totalTime * 2)) % 2)
+    if (((long)(game.totalTime * 8)) % 2)
         return;
     Texture2D *tex = game.powerUpSpecs[p->type].texture;
     Vector2 drawSize = {POWER_UP_TEXTURE_SIZE.x * 2,
@@ -878,6 +878,17 @@ static int snap(int x) {
     return (x - x1 < x2 - x) ? x1 : x2;
 }
 
+static void handlePowerUpHit(Tank *t) {
+    for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
+        PowerUp *p = &game.powerUps[i];
+        if (p->isActive &&
+            collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, p->pos.x,
+                      p->pos.y, POWER_UP_SIZE, POWER_UP_SIZE)) {
+            p->isActive = false;
+        }
+    }
+}
+
 static void handleCommand(Tank *t, Command cmd) {
     if (cmd.fire) {
         fireBullet(t);
@@ -923,6 +934,7 @@ static void handleCommand(Tank *t, Command cmd) {
             break;
         }
     }
+    handlePowerUpHit(t);
     if (checkTankToTankCollision(t)) {
         t->pos = prevPos;
         t->isMoving = false;
@@ -1205,6 +1217,11 @@ static void updateGameState() {
             tank->spawningTime += game.frameTime;
             if (tank->spawningTime >= SPAWNING_TIME) {
                 tank->status = TSActive;
+                if (tank->powerUp) {
+                    for (int k = 0; k < MAX_POWERUP_COUNT; k++) {
+                        game.powerUps[k].isActive = false;
+                    }
+                }
             }
         }
     }
