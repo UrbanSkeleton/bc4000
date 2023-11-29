@@ -681,7 +681,7 @@ static void initStage(char stage) {
     }
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         game.powerUps[i] = (PowerUp){
-            .type = rand() % PUGrenade,
+            .type = rand() % PUHelmet,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
             .isActive = false};
     }
@@ -896,6 +896,41 @@ static void updatePlayerLifesUI() {
         digitTextureRect(game.tanks[1].lifes);
 }
 
+static void createExplosion(ExplosionType type, Vector2 targetPos,
+                            int targetSize) {
+    int explosionSize = game.explosionAnimations[type].textures[0].width * 2;
+    int offset = (explosionSize - targetSize) / 2;
+    for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
+        if (game.explosions[i].ttl <= 0) {
+            game.explosions[i].ttl = game.explosionAnimations[type].duration;
+            game.explosions[i].type = type;
+            game.explosions[i].pos =
+                (Vector2){targetPos.x - offset, targetPos.y - offset};
+            break;
+        }
+    }
+}
+
+static void destroyTank(Tank *t) {
+    t->status = TSDead;
+    t->lifes--;
+    if (game.tankSpecs[t->type].isEnemy) {
+        game.activeEnemyCount--;
+    }
+    if (t->powerUp) {
+        t->powerUp->isActive = true;
+    }
+    createExplosion(ETBig, t->pos, TANK_SIZE);
+}
+
+static void destroyAllTanks() {
+    for (int i = 0; i < MAX_TANK_COUNT; i++) {
+        Tank *t = &game.tanks[i + 2];
+        if (t->status == TSActive)
+            destroyTank(t);
+    }
+}
+
 static void handlePowerUpHit(Tank *t) {
     if (game.tankSpecs[t->type].isEnemy)
         return;
@@ -926,11 +961,12 @@ static void handlePowerUpHit(Tank *t) {
                     break;
                 }
                 break;
-
+            case PUGrenade:
+                destroyAllTanks();
+                break;
             case PUShovel:
             case PUTimer:
             case PUHelmet:
-            case PUGrenade:
             case PUMax:
                 break;
             }
@@ -1044,21 +1080,6 @@ static void handleInput() {
     handleCommand(&game.tanks[0], cmd);
 }
 
-static void createExplosion(ExplosionType type, Vector2 targetPos,
-                            int targetSize) {
-    int explosionSize = game.explosionAnimations[type].textures[0].width * 2;
-    int offset = (explosionSize - targetSize) / 2;
-    for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
-        if (game.explosions[i].ttl <= 0) {
-            game.explosions[i].ttl = game.explosionAnimations[type].duration;
-            game.explosions[i].type = type;
-            game.explosions[i].pos =
-                (Vector2){targetPos.x - offset, targetPos.y - offset};
-            break;
-        }
-    }
-}
-
 static void destroyBullet(Bullet *b, bool explosion) {
     b->type = BTNone;
     b->tank->firedBulletCount--;
@@ -1129,18 +1150,6 @@ static void checkStageEnd() {
             initStage(game.stage + 1);
         }
     }
-}
-
-static void destroyTank(Tank *t) {
-    t->status = TSDead;
-    t->lifes--;
-    if (game.tankSpecs[t->type].isEnemy) {
-        game.activeEnemyCount--;
-    }
-    if (t->powerUp) {
-        t->powerUp->isActive = true;
-    }
-    createExplosion(ETBig, t->pos, TANK_SIZE);
 }
 
 static void checkBulletHit(Bullet *b) {
