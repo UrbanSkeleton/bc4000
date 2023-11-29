@@ -10,6 +10,7 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
+const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
 const int STAGE_COUNT = 2;
 const int SCREEN_WIDTH = 1400;
@@ -109,17 +110,18 @@ typedef struct {
     Texture2D *powerUpTexture;
     short speed;
     short bulletSpeed;
+    char maxBulletCount;
     bool isEnemy;
     short points;
     char texRow;
 } TankSpec;
 
 typedef enum {
+    PUStar,
+    PUTank,
     PUGrenade,
     PUHelmet,
     PUShovel,
-    PUStar,
-    PUTank,
     PUTimer,
     PUMax,
 } PowerUpType;
@@ -147,6 +149,8 @@ typedef struct {
     bool isMoving;
     char lifes;
     PowerUp *powerUp;
+    PlayerScore *playerScore;
+    char tier;
 } Tank;
 
 typedef struct {
@@ -636,6 +640,9 @@ static void spawnPlayer(Tank *t) {
     t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
     t->direction = DUp;
     t->status = TSActive;
+    t->tier = 0;
+    game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[0];
+    game.tankSpecs[t->type].maxBulletCount = 1;
 }
 
 static void initStage(char stage) {
@@ -649,15 +656,12 @@ static void initStage(char stage) {
     }
     loadStage(game.stage);
     game.tanks[0] = (Tank){
-        .type = TPlayer1,
-        .lifes = 2,
-    };
+        .type = TPlayer1, .lifes = 2, .playerScore = &game.playerScores[0]};
     spawnPlayer(&game.tanks[0]);
-    game.tanks[1] = (Tank){
-        .type = TPlayer2,
-        .lifes = 2,
-        .status = TSPending,
-    };
+    game.tanks[1] = (Tank){.type = TPlayer2,
+                           .lifes = 2,
+                           .status = TSPending,
+                           .playerScore = &game.playerScores[1]};
     // spawnPlayer(&game.tanks[e1]);
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
                                    FIELD_COLS - 8 - 4};
@@ -677,7 +681,7 @@ static void initStage(char stage) {
     }
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         game.powerUps[i] = (PowerUp){
-            .type = rand() % PUMax,
+            .type = rand() % PUGrenade,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
             .isActive = false};
     }
@@ -705,10 +709,12 @@ static void initGame() {
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
+                                          .maxBulletCount = 1,
                                           .speed = PLAYER_SPEED};
     game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
+                                          .maxBulletCount = 1,
                                           .speed = PLAYER_SPEED};
     game.tankSpecs[TBasic] =
         (TankSpec){.texture = &game.textures.enemies,
@@ -716,6 +722,7 @@ static void initGame() {
                    .texRow = 0,
                    .speed = ENEMY_SPEEDS[0],
                    .bulletSpeed = BULLET_SPEEDS[0],
+                   .maxBulletCount = 1,
                    .points = 100,
                    .isEnemy = true};
     game.tankSpecs[TFast] =
@@ -723,6 +730,7 @@ static void initGame() {
                    .powerUpTexture = &game.textures.enemiesWithPowerUps,
                    .texRow = 1,
                    .speed = ENEMY_SPEEDS[2],
+                   .maxBulletCount = 1,
                    .bulletSpeed = BULLET_SPEEDS[1],
                    .points = 200,
                    .isEnemy = true};
@@ -732,6 +740,7 @@ static void initGame() {
                    .texRow = 2,
                    .speed = ENEMY_SPEEDS[1],
                    .bulletSpeed = BULLET_SPEEDS[2],
+                   .maxBulletCount = 1,
                    .points = 300,
                    .isEnemy = true};
     game.tankSpecs[TArmor] =
@@ -740,6 +749,7 @@ static void initGame() {
                    .texRow = 3,
                    .speed = ENEMY_SPEEDS[1],
                    .bulletSpeed = BULLET_SPEEDS[1],
+                   .maxBulletCount = 1,
                    .points = 400,
                    .isEnemy = true};
     game.powerUpSpecs[PUTank] =
@@ -763,7 +773,8 @@ static void finishFire(Tank *t) {
 }
 
 static void fireBullet(Tank *t) {
-    if (t->firedBulletCount >= 1 || t->isFiring)
+    if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount ||
+        t->isFiring)
         return;
     t->firedBulletCount++;
     t->isFiring = true;
@@ -878,13 +889,52 @@ static int snap(int x) {
     return (x - x1 < x2 - x) ? x1 : x2;
 }
 
+static void updatePlayerLifesUI() {
+    game.uiElements[UIP1Lifes].textureSrc =
+        digitTextureRect(game.tanks[0].lifes);
+    game.uiElements[UIP2Lifes].textureSrc =
+        digitTextureRect(game.tanks[1].lifes);
+}
+
 static void handlePowerUpHit(Tank *t) {
+    if (game.tankSpecs[t->type].isEnemy)
+        return;
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         PowerUp *p = &game.powerUps[i];
         if (p->isActive &&
             collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, p->pos.x,
                       p->pos.y, POWER_UP_SIZE, POWER_UP_SIZE)) {
             p->isActive = false;
+            t->playerScore->totalScore += POWERUP_SCORE;
+            switch (p->type) {
+            case PUTank:
+                t->lifes++;
+                updatePlayerLifesUI();
+                break;
+            case PUStar:
+                if (t->tier == 3)
+                    return;
+                t->tier++;
+                switch (t->tier) {
+                case 1:
+                    game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[2];
+                    break;
+                case 2:
+                    game.tankSpecs[t->type].maxBulletCount = 2;
+                    break;
+                case 3:
+                    break;
+                }
+                break;
+
+            case PUShovel:
+            case PUTimer:
+            case PUHelmet:
+            case PUGrenade:
+            case PUMax:
+                break;
+            }
+            return;
         }
     }
 }
@@ -1017,48 +1067,58 @@ static void destroyBullet(Bullet *b, bool explosion) {
     }
 }
 
-static void destroyBrick(int row, int col) {
+static void destroyBrick(int row, int col, bool destroyConcrete) {
     if (row < 0 || row >= FIELD_ROWS || col < 0 || col >= FIELD_COLS)
         return;
-    if (game.field[row][col].type == CTBrick)
+    if (game.field[row][col].type == CTBrick ||
+        (destroyConcrete && game.field[row][col].type == CTConcrete))
         game.field[row][col].type = CTBlank;
 }
 
-static void checkBulletRows(Bullet *b, int startRow, int endRow, int col) {
+static void checkBulletRows(Bullet *b, int startRow, int endRow, int col,
+                            int nextCol) {
     for (int r = startRow; r <= endRow; r++) {
         CellType cellType = game.field[r][col].type;
         if (game.cellSpecs[cellType].isSolid) {
             destroyBullet(b, true);
-            for (int rr = startRow - 1; rr <= endRow + 1; rr++)
-                destroyBrick(rr, col);
+            bool destroyConcrete = b->tank->tier == 3;
+            for (int rr = startRow - 1; rr <= endRow + 1; rr++) {
+                destroyBrick(rr, col, destroyConcrete);
+                if (destroyConcrete) {
+                    destroyBrick(rr, nextCol, destroyConcrete);
+                }
+            }
             return;
         }
     }
 }
 
-static void checkBulletCols(Bullet *b, int startCol, int endCol, int row) {
+static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
+                            int nextRow) {
     for (int c = startCol; c <= endCol; c++) {
         CellType cellType = game.field[row][c].type;
         if (game.cellSpecs[cellType].isSolid) {
             destroyBullet(b, true);
-            for (int cc = startCol - 1; cc <= endCol + 1; cc++)
-                destroyBrick(row, cc);
+            bool destroyConcrete = b->tank->tier == 3;
+            for (int cc = startCol - 1; cc <= endCol + 1; cc++) {
+                destroyBrick(row, cc, destroyConcrete);
+                if (destroyConcrete) {
+                    destroyBrick(nextRow, cc, destroyConcrete);
+                }
+            }
             return;
         }
     }
 }
 
-static void checkPlayerKill(Tank *t) {
-    if (!game.tankSpecs[t->type].isEnemy) {
-        if (t->lifes == -1) {
-            t->lifes = 2;
-        }
-        spawnPlayer(t);
-        game.uiElements[UIP1Lifes].textureSrc =
-            digitTextureRect(game.tanks[0].lifes);
-        game.uiElements[UIP2Lifes].textureSrc =
-            digitTextureRect(game.tanks[1].lifes);
+static void handlePlayerKill(Tank *t) {
+    if (game.tankSpecs[t->type].isEnemy)
+        return;
+    if (t->lifes == -1) {
+        t->lifes = 2;
     }
+    spawnPlayer(t);
+    updatePlayerLifesUI();
 }
 
 static void checkStageEnd() {
@@ -1094,7 +1154,7 @@ static void checkBulletHit(Bullet *b) {
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             destroyBullet(b, true);
             destroyTank(t);
-            checkPlayerKill(t);
+            handlePlayerKill(t);
             if (!game.tankSpecs[b->tank->type].isEnemy) {
                 game.playerScores[b->tank->type].totalScore +=
                     game.tankSpecs[t->type].points;
@@ -1143,28 +1203,28 @@ static void checkBulletCollision(Bullet *b) {
         int startRow = ((int)b->pos.y) / CELL_SIZE;
         int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
         int col = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
-        checkBulletRows(b, startRow, endRow, col);
+        checkBulletRows(b, startRow, endRow, col, col + 1);
         return;
     }
     case DLeft: {
         int startRow = ((int)b->pos.y) / CELL_SIZE;
         int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
         int col = ((int)b->pos.x) / CELL_SIZE;
-        checkBulletRows(b, startRow, endRow, col);
+        checkBulletRows(b, startRow, endRow, col, col - 1);
         return;
     }
     case DUp: {
         int startCol = ((int)b->pos.x) / CELL_SIZE;
         int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
         int row = ((int)(b->pos.y)) / CELL_SIZE;
-        checkBulletCols(b, startCol, endCol, row);
+        checkBulletCols(b, startCol, endCol, row, row - 1);
         return;
     }
     case DDown: {
         int startCol = ((int)b->pos.x) / CELL_SIZE;
         int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
         int row = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
-        checkBulletCols(b, startCol, endCol, row);
+        checkBulletCols(b, startCol, endCol, row, row + 1);
         return;
     }
     }
