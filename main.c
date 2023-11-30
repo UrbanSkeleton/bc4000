@@ -39,7 +39,7 @@ const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 100;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
-const short BULLET_SPEEDS[3] = {400, 450, 500};
+const short BULLET_SPEEDS[3] = {450, 500, 550};
 const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
@@ -120,9 +120,9 @@ typedef enum {
     PUStar,
     PUTank,
     PUGrenade,
+    PUTimer,
     PUHelmet,
     PUShovel,
-    PUTimer,
     PUMax,
 } PowerUpType;
 
@@ -143,7 +143,6 @@ typedef struct {
     Direction direction;
     char texColOffset;
     char firedBulletCount;
-    bool isFiring;
     TankStatus status;
     float spawningTime;
     bool isMoving;
@@ -250,6 +249,7 @@ typedef struct {
     UIElement uiElements[UIMax];
     PlayerScore playerScores[2];
     PowerUp powerUps[MAX_POWERUP_COUNT];
+    float timerPowerUpTimeLeft;
 } Game;
 
 static Game game;
@@ -636,13 +636,15 @@ static void initUIElements() {
     }
 }
 
-static void spawnPlayer(Tank *t) {
+static void spawnPlayer(Tank *t, bool resetTier) {
     t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
     t->direction = DUp;
     t->status = TSActive;
-    t->tier = 0;
-    game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[0];
-    game.tankSpecs[t->type].maxBulletCount = 1;
+    if (resetTier) {
+        t->tier = 0;
+        game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[0];
+        game.tankSpecs[t->type].maxBulletCount = 1;
+    }
 }
 
 static void initStage(char stage) {
@@ -657,7 +659,7 @@ static void initStage(char stage) {
     loadStage(game.stage);
     game.tanks[0] = (Tank){
         .type = TPlayer1, .lifes = 2, .playerScore = &game.playerScores[0]};
-    spawnPlayer(&game.tanks[0]);
+    spawnPlayer(&game.tanks[0], false);
     game.tanks[1] = (Tank){.type = TPlayer2,
                            .lifes = 2,
                            .status = TSPending,
@@ -681,7 +683,7 @@ static void initStage(char stage) {
     }
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         game.powerUps[i] = (PowerUp){
-            .type = rand() % PUHelmet,
+            .type = rand() % PUTank,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
             .isActive = false};
     }
@@ -767,17 +769,10 @@ static void initGame() {
     initStage(1);
 }
 
-static void finishFire(Tank *t) {
-    if (!t->firedBulletCount)
-        t->isFiring = false;
-}
-
 static void fireBullet(Tank *t) {
-    if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount ||
-        t->isFiring)
+    if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount)
         return;
     t->firedBulletCount++;
-    t->isFiring = true;
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
         if (b->type != BTNone) {
@@ -964,8 +959,10 @@ static void handlePowerUpHit(Tank *t) {
             case PUGrenade:
                 destroyAllTanks();
                 break;
-            case PUShovel:
             case PUTimer:
+                game.timerPowerUpTimeLeft = 20.0;
+                break;
+            case PUShovel:
             case PUHelmet:
             case PUMax:
                 break;
@@ -978,8 +975,6 @@ static void handlePowerUpHit(Tank *t) {
 static void handleCommand(Tank *t, Command cmd) {
     if (cmd.fire) {
         fireBullet(t);
-    } else {
-        finishFire(t);
     }
     t->isMoving = cmd.move;
     if (!cmd.move)
@@ -1051,6 +1046,8 @@ static void handleTankAI(Tank *t) {
 }
 
 static void handleAI() {
+    if (game.timerPowerUpTimeLeft > 0)
+        return;
     for (int i = 2; i < MAX_TANK_COUNT; i++) {
         Tank *t = &game.tanks[i];
         if (t->status != TSActive)
@@ -1074,7 +1071,7 @@ static void handleInput() {
         cmd.move = true;
         cmd.direction = DDown;
     }
-    if (IsKeyDown(KEY_Z)) {
+    if (IsKeyPressed(KEY_Z)) {
         cmd.fire = true;
     }
     handleCommand(&game.tanks[0], cmd);
@@ -1138,7 +1135,7 @@ static void handlePlayerKill(Tank *t) {
     if (t->lifes == -1) {
         t->lifes = 2;
     }
-    spawnPlayer(t);
+    spawnPlayer(t, true);
     updatePlayerLifesUI();
 }
 
@@ -1313,6 +1310,9 @@ int main(void) {
         game.frameTime = GetFrameTime();
         game.totalTime = GetTime();
         game.timeSinceSpawn += game.frameTime;
+        if (game.timerPowerUpTimeLeft > 0) {
+            game.timerPowerUpTimeLeft -= game.frameTime;
+        }
         handleInput();
         handleAI();
         updateGameState();
