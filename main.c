@@ -10,6 +10,8 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
+const float TIMER_TIME = 15.0;
+const float SHIELD_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
 const int STAGE_COUNT = 2;
@@ -121,7 +123,7 @@ typedef enum {
     PUTank,
     PUGrenade,
     PUTimer,
-    PUHelmet,
+    PUShield,
     PUShovel,
     PUMax,
 } PowerUpType;
@@ -150,6 +152,7 @@ typedef struct {
     PowerUp *powerUp;
     PlayerScore *playerScore;
     char tier;
+    float shieldTimeLeft;
 } Tank;
 
 typedef struct {
@@ -226,6 +229,7 @@ typedef struct {
     Texture2D ui;
     Texture2D digits;
     Texture2D powerups;
+    Texture2D shield;
 } Textures;
 
 typedef struct {
@@ -299,6 +303,14 @@ static void drawTank(Tank *tank) {
         (Rectangle){tank->pos.x + drawOffset, tank->pos.y + drawOffset,
                     drawSize, drawSize},
         (Vector2){}, 0, WHITE);
+    if (tank->shieldTimeLeft > 0) {
+        Texture2D *tex = &game.textures.shield;
+        int texY = (((long)(game.totalTime * 32)) % 2) * tex->width;
+        DrawTexturePro(
+            *tex, (Rectangle){0, texY, tex->width, tex->width},
+            (Rectangle){tank->pos.x, tank->pos.y, TANK_SIZE, TANK_SIZE},
+            (Vector2){}, 0, WHITE);
+    }
 }
 
 static void drawSpawningTank(Tank *tank) {
@@ -445,6 +457,7 @@ static void drawGame() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.shield = LoadTexture("textures/shield.png");
     game.textures.powerups = LoadTexture("textures/powerup.png");
     game.textures.ui = LoadTexture("textures/ui.png");
     game.textures.digits = LoadTexture("textures/digits.png");
@@ -683,7 +696,7 @@ static void initStage(char stage) {
     }
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         game.powerUps[i] = (PowerUp){
-            .type = rand() % PUTank,
+            .type = rand() % PUMax,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
             .isActive = false};
     }
@@ -764,7 +777,7 @@ static void initGame() {
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 3};
     game.powerUpSpecs[PUStar] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
-    game.powerUpSpecs[PUHelmet] =
+    game.powerUpSpecs[PUShield] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
     initStage(1);
 }
@@ -960,10 +973,12 @@ static void handlePowerUpHit(Tank *t) {
                 destroyAllTanks();
                 break;
             case PUTimer:
-                game.timerPowerUpTimeLeft = 20.0;
+                game.timerPowerUpTimeLeft = TIMER_TIME;
+                break;
+            case PUShield:
+                t->shieldTimeLeft = SHIELD_TIME;
                 break;
             case PUShovel:
-            case PUHelmet:
             case PUMax:
                 break;
             }
@@ -1159,8 +1174,10 @@ static void checkBulletHit(Bullet *b) {
         if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, t->pos.x,
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             destroyBullet(b, true);
-            destroyTank(t);
-            handlePlayerKill(t);
+            if (t->shieldTimeLeft <= 0) {
+                destroyTank(t);
+                handlePlayerKill(t);
+            }
             if (!game.tankSpecs[b->tank->type].isEnemy) {
                 game.playerScores[b->tank->type].totalScore +=
                     game.tankSpecs[t->type].points;
@@ -1295,6 +1312,12 @@ static void updateGameState() {
     checkStageEnd();
 }
 
+void drawFloat(float x) {
+    char buffer[20];
+    snprintf(buffer, 20, "%f", x);
+    DrawText(buffer, 10, 10, 10, WHITE);
+}
+
 int main(void) {
 
     srand(time(0));
@@ -1313,12 +1336,19 @@ int main(void) {
         if (game.timerPowerUpTimeLeft > 0) {
             game.timerPowerUpTimeLeft -= game.frameTime;
         }
+        if (game.tanks[0].shieldTimeLeft > 0) {
+            game.tanks[0].shieldTimeLeft -= game.frameTime;
+        }
+        if (game.tanks[1].shieldTimeLeft > 0) {
+            game.tanks[1].shieldTimeLeft -= game.frameTime;
+        }
         handleInput();
         handleAI();
         updateGameState();
         BeginDrawing();
         ClearBackground(BLACK);
         drawGame();
+        // drawFloat(game.tanks[0].shieldTimeLeft);
         EndDrawing();
     }
 
