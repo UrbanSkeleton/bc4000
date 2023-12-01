@@ -10,8 +10,34 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
+typedef int IntPair[2];
+
+const IntPair fortressWall[] = {
+    {13 * 4 - 6 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 2 + 4},
+    {13 * 4 - 4 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 2 + 4},
+    {13 * 4 - 2 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 2 + 4},
+
+    {13 * 4 - 6 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 3 + 4},
+    {13 * 4 - 4 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 3 + 4},
+    {13 * 4 - 2 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 3 + 4},
+
+    {13 * 4 - 6 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 8 + 4},
+    {13 * 4 - 4 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 8 + 4},
+    {13 * 4 - 2 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 8 + 4},
+
+    {13 * 4 - 6 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 9 + 4},
+    {13 * 4 - 4 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 9 + 4},
+    {13 * 4 - 2 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 9 + 4},
+
+    {13 * 4 - 6 + 2, 6 * 4 + 0 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 0 + 4},
+    {13 * 4 - 6 + 2, 6 * 4 + 1 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 1 + 4},
+
+    {13 * 4 - 6 + 2, 6 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 2 + 4},
+    {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
+};
 const float TIMER_TIME = 15.0;
 const float SHIELD_TIME = 15.0;
+const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
 const int STAGE_COUNT = 2;
@@ -254,6 +280,7 @@ typedef struct {
     PlayerScore playerScores[2];
     PowerUp powerUps[MAX_POWERUP_COUNT];
     float timerPowerUpTimeLeft;
+    float shovelPowerUpTimeLeft;
 } Game;
 
 static Game game;
@@ -696,7 +723,8 @@ static void initStage(char stage) {
     }
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         game.powerUps[i] = (PowerUp){
-            .type = rand() % PUMax,
+            // .type = rand() % PUMax,
+            .type = PUShovel,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
             .isActive = false};
     }
@@ -979,6 +1007,12 @@ static void handlePowerUpHit(Tank *t) {
                 t->shieldTimeLeft = SHIELD_TIME;
                 break;
             case PUShovel:
+                game.shovelPowerUpTimeLeft = SHOVEL_TIME;
+                for (int i = 0; i < ASIZE(fortressWall); i++) {
+                    game.field[fortressWall[i][0]][fortressWall[i][1]].type =
+                        CTConcrete;
+                }
+                break;
             case PUMax:
                 break;
             }
@@ -1335,6 +1369,15 @@ int main(void) {
         game.timeSinceSpawn += game.frameTime;
         if (game.timerPowerUpTimeLeft > 0) {
             game.timerPowerUpTimeLeft -= game.frameTime;
+        }
+        if (game.shovelPowerUpTimeLeft > 0) {
+            game.shovelPowerUpTimeLeft -= game.frameTime;
+            if (game.shovelPowerUpTimeLeft <= 0) {
+                for (int i = 0; i < ASIZE(fortressWall); i++) {
+                    game.field[fortressWall[i][0]][fortressWall[i][1]].type =
+                        CTBrick;
+                }
+            }
         }
         if (game.tanks[0].shieldTimeLeft > 0) {
             game.tanks[0].shieldTimeLeft -= game.frameTime;
