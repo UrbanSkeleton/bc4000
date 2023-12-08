@@ -40,7 +40,7 @@ const float SHIELD_TIME = 15.0;
 const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
-const int STAGE_COUNT = 2;
+const int STAGE_COUNT = 1;
 const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
 const int FIELD_COLS = 64;
@@ -293,7 +293,7 @@ static void drawCell(Cell *cell) {
                    (Rectangle){cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE},
                    (Vector2){}, 0, WHITE);
 #ifdef DRAW_CELL_GRID
-    DrawRectangleLines(cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE, BLACK);
+    DrawRectangleLines(cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE, BLUE);
 #endif
 }
 
@@ -534,36 +534,23 @@ static void loadTextures() {
 
 static void loadStage(int stage) {
     char filename[50];
-    snprintf(filename, 50, "levels/%d.stage", stage);
+    snprintf(filename, 50, "levels/stage%.2d", stage);
     Buffer buf = readFile(filename);
+    int ci = 0;
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            game.field[i][j].texRow = i - 2 % 4;
-            game.field[i][j].texCol = j % 4;
             if (i <= 1 || i >= FIELD_ROWS - 2 || j <= 3 ||
                 j >= FIELD_COLS - 8) {
                 game.field[i][j].type = CTBorder;
+                game.field[i][j].texRow = 0;
+                game.field[i][j].texCol = 0;
                 continue;
             }
-            int index =
-                ((i - 2) / 4) * ((FIELD_COLS - 12) / 4 + 1) + ((j - 4) / 4);
-            switch (buf.bytes[index]) {
-            case 'b':
-                game.field[i][j].type = CTBrick;
-                break;
-            case 'c':
-                game.field[i][j].type = CTConcrete;
-                break;
-            case 'f':
-                game.field[i][j].type = CTForest;
-                break;
-            case 'r':
-                game.field[i][j].type = CTRiver;
-                break;
-            default:
-                game.field[i][j].type = CTBlank;
-                break;
-            }
+            game.field[i][j].type = buf.bytes[ci];
+            char texNumber = buf.bytes[ci + 1];
+            game.field[i][j].texRow = texNumber < 2 ? 0 : 1;
+            game.field[i][j].texCol = texNumber % 2;
+            ci += 2;
         }
     }
 }
