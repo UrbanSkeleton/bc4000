@@ -20,10 +20,12 @@ static const int N = 13 * 4;
 
 static Cell cells[N * N];
 
+#define STAGE "02"
+
 int main(void) {
     int x, y, bpp;
     const char *filename =
-        "/Users/Candid/Documents/bc4000-stages/Battle_City_Stage02.png";
+        "/Users/Candid/Documents/bc4000-stages/Battle_City_Stage" STAGE ".png";
     unsigned char *data = stbi_load(filename, &x, &y, &bpp, 0);
     if (!data) {
         printf("Cannot open file %s\n", filename);
@@ -78,7 +80,7 @@ int main(void) {
         // printf("%d %d %d\n", cellIndex, cells[cellIndex].type,
         //        cells[cellIndex].texNumber);
     }
-    FILE *out = fopen("levels/stage01", "wb");
+    FILE *out = fopen("levels/stage" STAGE, "wb");
     fwrite((void *)cells, sizeof(cells), 1, out);
     fclose(out);
 }

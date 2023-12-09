@@ -10,9 +10,12 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
-typedef int IntPair[2];
+typedef struct {
+    int row;
+    int col;
+} CellInfo;
 
-const IntPair fortressWall[] = {
+const CellInfo fortressWall[] = {
     {13 * 4 - 6 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 2 + 4},
     {13 * 4 - 4 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 2 + 4},
     {13 * 4 - 2 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 2 + 4},
@@ -40,7 +43,7 @@ const float SHIELD_TIME = 15.0;
 const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
-const int STAGE_COUNT = 1;
+const int STAGE_COUNT = 2;
 const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
 const int FIELD_COLS = 64;
@@ -996,8 +999,12 @@ static void handlePowerUpHit(Tank *t) {
             case PUShovel:
                 game.shovelPowerUpTimeLeft = SHOVEL_TIME;
                 for (int i = 0; i < ASIZE(fortressWall); i++) {
-                    game.field[fortressWall[i][0]][fortressWall[i][1]].type =
+                    game.field[fortressWall[i].row][fortressWall[i].col].type =
                         CTConcrete;
+                    game.field[fortressWall[i].row][fortressWall[i].col]
+                        .texRow = fortressWall[i].row % 2;
+                    game.field[fortressWall[i].row][fortressWall[i].col]
+                        .texCol = fortressWall[i].col % 2;
                 }
                 break;
             case PUMax:
@@ -1361,7 +1368,7 @@ int main(void) {
             game.shovelPowerUpTimeLeft -= game.frameTime;
             if (game.shovelPowerUpTimeLeft <= 0) {
                 for (int i = 0; i < ASIZE(fortressWall); i++) {
-                    game.field[fortressWall[i][0]][fortressWall[i][1]].type =
+                    game.field[fortressWall[i].row][fortressWall[i].col].type =
                         CTBrick;
                 }
             }
