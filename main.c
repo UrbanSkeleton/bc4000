@@ -43,7 +43,7 @@ const float SHIELD_TIME = 15.0;
 const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
-const int STAGE_COUNT = 2;
+const int STAGE_COUNT = 4;
 const int SCREEN_WIDTH = 1400;
 const int SCREEN_HEIGHT = 900;
 const int FIELD_COLS = 64;
@@ -797,7 +797,7 @@ static void initGame() {
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
     game.powerUpSpecs[PUShield] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
-    initStage(1);
+    initStage(4);
 }
 
 static void fireBullet(Tank *t) {

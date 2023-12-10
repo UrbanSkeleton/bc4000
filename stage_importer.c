@@ -20,7 +20,7 @@ static const int N = 13 * 4;
 
 static Cell cells[N * N];
 
-#define STAGE "02"
+#define STAGE "04"
 
 int main(void) {
     int x, y, bpp;
@@ -72,6 +72,18 @@ int main(void) {
             cells[cellIndex] = (Cell){.type = CTForest, .texNumber = 2};
         } else if (r == 152 && g == 232 && b == 0) {
             cells[cellIndex] = (Cell){.type = CTForest, .texNumber = 3};
+        } else if (r == 64 && g == 64 && b == 255) {
+            if (data[i + (1 * bpp)] == 64) {
+                if (data[i + (3 * bpp)] == 64)
+                    cells[cellIndex] = (Cell){.type = CTRiver, .texNumber = 0};
+                else
+                    cells[cellIndex] = (Cell){.type = CTRiver, .texNumber = 2};
+            } else {
+                if (data[i + 2 * (N * 4 * bpp)] == 64)
+                    cells[cellIndex] = (Cell){.type = CTRiver, .texNumber = 1};
+                else
+                    cells[cellIndex] = (Cell){.type = CTRiver, .texNumber = 3};
+            }
         } else {
             printf("Invalid cell at %d: r=%d, g=%d, b=%d\n", cellIndex, r, g,
                    b);
