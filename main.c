@@ -801,7 +801,7 @@ static void initGame() {
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
     game.powerUpSpecs[PUShield] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
-    initStage(17);
+    initStage(35);
 }
 
 static void fireBullet(Tank *t) {

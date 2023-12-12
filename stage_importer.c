@@ -107,7 +107,7 @@ void createStage(int stage) {
 }
 
 int main(void) {
-    for (int stage = 17; stage <= 17; stage++) {
+    for (int stage = 18; stage <= 35; stage++) {
         createStage(stage);
     }
 }
