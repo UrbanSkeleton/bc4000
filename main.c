@@ -222,6 +222,7 @@ typedef enum {
     CTConcrete,
     CTForest,
     CTRiver,
+    CTIce,
     CTMax
 } CellType;
 
@@ -259,6 +260,7 @@ typedef struct {
     Texture2D digits;
     Texture2D powerups;
     Texture2D shield;
+    Texture2D ice;
 } Textures;
 
 typedef struct {
@@ -502,6 +504,9 @@ static void loadTextures() {
     game.textures.brick = LoadTexture("textures/brick.png");
     game.cellSpecs[CTBrick] =
         (CellSpec){.texture = &game.textures.brick, .isSolid = true};
+    game.textures.ice = LoadTexture("textures/ice.png");
+    game.cellSpecs[CTIce] =
+        (CellSpec){.texture = &game.textures.ice, .isPassable = true};
     game.textures.concrete = LoadTexture("textures/concrete.png");
     game.cellSpecs[CTConcrete] =
         (CellSpec){.texture = &game.textures.concrete, .isSolid = true};
@@ -713,8 +718,7 @@ static void initStage(char stage) {
     }
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         game.powerUps[i] = (PowerUp){
-            // .type = rand() % PUMax,
-            .type = PUShovel,
+            .type = rand() % PUMax,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
             .isActive = false};
     }
@@ -797,7 +801,7 @@ static void initGame() {
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
     game.powerUpSpecs[PUShield] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
-    initStage(16);
+    initStage(17);
 }
 
 static void fireBullet(Tank *t) {

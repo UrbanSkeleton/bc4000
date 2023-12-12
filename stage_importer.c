@@ -8,6 +8,7 @@ typedef enum {
     CTConcrete,
     CTForest,
     CTRiver,
+    CTIce,
     CTMax
 } CellType;
 
@@ -48,8 +49,15 @@ void createStage(int stage) {
             int k = i + (1 * bpp);
             if (data[k] == 160)
                 cells[cellIndex] = (Cell){.type = CTBrick, .texNumber = 1};
-            else
+            else if (data[k] == 188) {
+                int kk = i + (2 * bpp) + (N * 4 * bpp);
+                if (data[kk] == 255)
+                    cells[cellIndex] = (Cell){.type = CTIce, .texNumber = 1};
+                else
+                    cells[cellIndex] = (Cell){.type = CTIce, .texNumber = 0};
+            } else
                 cells[cellIndex] = (Cell){.type = CTBlank, .texNumber = 0};
+
         } else if (r == 188 && g == 188 && b == 188) {
             int k = i + (3 * bpp) + (N * 4 * bpp);
             if (data[k] == 188 && data[k + 1] == 188 && data[k + 2] == 188) {
@@ -99,7 +107,7 @@ void createStage(int stage) {
 }
 
 int main(void) {
-    for (int stage = 1; stage <= 16; stage++) {
+    for (int stage = 17; stage <= 17; stage++) {
         createStage(stage);
     }
 }
