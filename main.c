@@ -6,6 +6,8 @@
 
 #include "utils.c"
 
+void gameLogic();
+
 // #define DRAW_CELL_GRID
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
@@ -38,6 +40,7 @@ const CellInfo fortressWall[] = {
     {13 * 4 - 6 + 2, 6 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 2 + 4},
     {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
 };
+const float TITLE_SLIDE_TIME = 0.1;
 const float TIMER_TIME = 15.0;
 const float SHIELD_TIME = 15.0;
 const float SHOVEL_TIME = 15.0;
@@ -261,7 +264,17 @@ typedef struct {
     Texture2D powerups;
     Texture2D shield;
     Texture2D ice;
+    Texture2D title;
 } Textures;
+
+typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
+
+typedef struct {
+    float time;
+    MenuSelectedItem menuSelecteItem;
+} Title;
+
+typedef enum { GMOnePlayer, GMTwoPlayers } GameMode;
 
 typedef struct {
     Cell field[FIELD_ROWS][FIELD_COLS];
@@ -286,6 +299,10 @@ typedef struct {
     PowerUp powerUps[MAX_POWERUP_COUNT];
     float timerPowerUpTimeLeft;
     float shovelPowerUpTimeLeft;
+    void (*logic)();
+    void (*draw)();
+    Title title;
+    GameMode mode;
 } Game;
 
 static Game game;
@@ -489,6 +506,7 @@ static void drawGame() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.title = LoadTexture("textures/title.png");
     game.textures.shield = LoadTexture("textures/shield.png");
     game.textures.powerups = LoadTexture("textures/powerup.png");
     game.textures.ui = LoadTexture("textures/ui.png");
@@ -699,7 +717,9 @@ static void initStage(char stage) {
                            .lifes = 2,
                            .status = TSPending,
                            .playerScore = &game.playerScores[1]};
-    // spawnPlayer(&game.tanks[e1]);
+    if (game.mode == GMTwoPlayers) {
+        spawnPlayer(&game.tanks[1], false);
+    }
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
                                    FIELD_COLS - 8 - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
@@ -1350,6 +1370,82 @@ void drawFloat(float x) {
     DrawText(buffer, 10, 10, 10, WHITE);
 }
 
+void titleLogic() {
+    game.title.time += game.frameTime;
+    if (game.title.time > TITLE_SLIDE_TIME &&
+        game.title.menuSelecteItem == MNone) {
+        game.title.menuSelecteItem = MOnePlayer;
+    }
+    if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+        game.title.menuSelecteItem =
+            game.title.menuSelecteItem % (MMax - 1) + 1;
+    } else if (IsKeyPressed(KEY_ENTER)) {
+        switch (game.title.menuSelecteItem) {
+        case MOnePlayer:
+            game.mode = GMOnePlayer;
+            break;
+        case MTwoPlayers:
+            game.mode = GMTwoPlayers;
+            break;
+        default:
+            break;
+        }
+        game.logic = gameLogic;
+        game.draw = drawGame;
+        initStage(1);
+    }
+}
+
+void drawTitle() {
+    int topY = 200;
+    Texture2D *tex = &game.textures.title;
+    int titleTexHeight = tex->height;
+    int x = (SCREEN_WIDTH - tex->width * 2) / 2;
+    int y = SCREEN_HEIGHT -
+            (SCREEN_HEIGHT - topY) *
+                (MIN(game.title.time, TITLE_SLIDE_TIME) / TITLE_SLIDE_TIME);
+    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, titleTexHeight},
+                   (Rectangle){x, y, tex->width * 2, titleTexHeight * 2},
+                   (Vector2){}, 0, WHITE);
+    if (game.title.menuSelecteItem != MNone) {
+        tex = &game.textures.player1Tank;
+        int texX =
+            (3 * 2 + ((long)(game.totalTime * 16) % 2)) * TANK_TEXTURE_SIZE;
+        DrawTexturePro(
+            *tex, (Rectangle){texX, 0, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
+            (Rectangle){x + 150,
+                        topY + titleTexHeight * 2 - 110 +
+                            (game.title.menuSelecteItem - 1) * 60,
+                        TANK_TEXTURE_SIZE * 4, TANK_TEXTURE_SIZE * 4},
+            (Vector2){}, 0, WHITE);
+    }
+}
+
+void gameLogic() {
+    game.timeSinceSpawn += game.frameTime;
+    if (game.timerPowerUpTimeLeft > 0) {
+        game.timerPowerUpTimeLeft -= game.frameTime;
+    }
+    if (game.shovelPowerUpTimeLeft > 0) {
+        game.shovelPowerUpTimeLeft -= game.frameTime;
+        if (game.shovelPowerUpTimeLeft <= 0) {
+            for (int i = 0; i < ASIZE(fortressWall); i++) {
+                game.field[fortressWall[i].row][fortressWall[i].col].type =
+                    CTBrick;
+            }
+        }
+    }
+    if (game.tanks[0].shieldTimeLeft > 0) {
+        game.tanks[0].shieldTimeLeft -= game.frameTime;
+    }
+    if (game.tanks[1].shieldTimeLeft > 0) {
+        game.tanks[1].shieldTimeLeft -= game.frameTime;
+    }
+    handleInput();
+    handleAI();
+    updateGameState();
+}
+
 int main(void) {
 
     srand(time(0));
@@ -1359,36 +1455,19 @@ int main(void) {
 
     initGame();
 
+    game.logic = titleLogic;
+    game.draw = drawTitle;
+
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
         game.frameTime = GetFrameTime();
         game.totalTime = GetTime();
-        game.timeSinceSpawn += game.frameTime;
-        if (game.timerPowerUpTimeLeft > 0) {
-            game.timerPowerUpTimeLeft -= game.frameTime;
-        }
-        if (game.shovelPowerUpTimeLeft > 0) {
-            game.shovelPowerUpTimeLeft -= game.frameTime;
-            if (game.shovelPowerUpTimeLeft <= 0) {
-                for (int i = 0; i < ASIZE(fortressWall); i++) {
-                    game.field[fortressWall[i].row][fortressWall[i].col].type =
-                        CTBrick;
-                }
-            }
-        }
-        if (game.tanks[0].shieldTimeLeft > 0) {
-            game.tanks[0].shieldTimeLeft -= game.frameTime;
-        }
-        if (game.tanks[1].shieldTimeLeft > 0) {
-            game.tanks[1].shieldTimeLeft -= game.frameTime;
-        }
-        handleInput();
-        handleAI();
-        updateGameState();
+
+        game.logic();
         BeginDrawing();
         ClearBackground(BLACK);
-        drawGame();
+        game.draw();
         // drawFloat(game.tanks[0].shieldTimeLeft);
         EndDrawing();
     }
