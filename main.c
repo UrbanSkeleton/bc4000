@@ -44,6 +44,7 @@ const CellInfo fortressWall[] = {
 };
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
+const float STAGE_CURTAIN_TIME = 1.5;
 const float STAGE_SUMMARY_SLIDE_TIME = 0.5;
 const float TIMER_TIME = 15.0;
 const float SHIELD_TIME = 15.0;
@@ -314,6 +315,7 @@ typedef struct {
     Title title;
     StageSummary stageSummary;
     GameMode mode;
+    float stageCurtainTime;
 } Game;
 
 static Game game;
@@ -504,6 +506,28 @@ static void drawPowerUps() {
     }
 }
 
+static int centerX(int size) { return (SCREEN_WIDTH - size) / 2; }
+
+static void drawStageCurtain() {
+    if (game.stageCurtainTime >= STAGE_CURTAIN_TIME)
+        return;
+    float delayTime = 1;
+    int visibleHeight =
+        SCREEN_HEIGHT * (MAX(game.stageCurtainTime - delayTime, 0) /
+                         (STAGE_CURTAIN_TIME - delayTime));
+    int h = (SCREEN_HEIGHT - visibleHeight) / 2;
+    DrawRectangle(0, 0, SCREEN_WIDTH, h, (Color){115, 117, 115, 255});
+    DrawRectangle(0, SCREEN_HEIGHT - h, SCREEN_WIDTH, h,
+                  (Color){115, 117, 115, 255});
+    if (game.stageCurtainTime < delayTime) {
+        char text[20];
+        snprintf(text, 20, "STAGE %2d", game.stage);
+        int textSize = MeasureText(text, FONT_SIZE);
+        DrawText(text, centerX(textSize), (SCREEN_HEIGHT - FONT_SIZE) / 2,
+                 FONT_SIZE, BLACK);
+    }
+}
+
 static void drawGame() {
     drawField();
     drawBullets();
@@ -513,6 +537,7 @@ static void drawGame() {
     drawExplosions();
     drawPowerUps();
     drawUI();
+    drawStageCurtain();
 }
 
 static void loadTextures() {
@@ -715,6 +740,7 @@ static void spawnPlayer(Tank *t, bool resetTier) {
 
 static void initStage(char stage) {
     game.stage = stage;
+    game.stageCurtainTime = 0;
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             game.field[i][j] =
@@ -1390,8 +1416,6 @@ void stageSummaryLogic() {
     }
 }
 
-static int centerX(int size) { return (SCREEN_WIDTH - size) / 2; }
-
 void drawStageSummary() {
     int topY = SCREEN_HEIGHT -
                (SCREEN_HEIGHT - 150) *
@@ -1523,6 +1547,15 @@ void drawTitle() {
 }
 
 void gameLogic() {
+    if (!game.stageCurtainTime) {
+        if (IsKeyPressed(KEY_ENTER)) {
+            game.stageCurtainTime = 0.001;
+        }
+        return;
+    }
+    if (game.stageCurtainTime && game.stageCurtainTime < STAGE_CURTAIN_TIME) {
+        game.stageCurtainTime += game.frameTime;
+    }
     game.timeSinceSpawn += game.frameTime;
     if (game.timerPowerUpTimeLeft > 0) {
         game.timerPowerUpTimeLeft -= game.frameTime;
