@@ -7,6 +7,8 @@
 #include "utils.c"
 
 void gameLogic();
+void stageSummaryLogic();
+void drawStageSummary();
 
 // #define DRAW_CELL_GRID
 
@@ -40,7 +42,9 @@ const CellInfo fortressWall[] = {
     {13 * 4 - 6 + 2, 6 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 2 + 4},
     {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
 };
-const float TITLE_SLIDE_TIME = 0.1;
+const int FONT_SIZE = 40;
+const float TITLE_SLIDE_TIME = 1;
+const float STAGE_SUMMARY_SLIDE_TIME = 0.5;
 const float TIMER_TIME = 15.0;
 const float SHIELD_TIME = 15.0;
 const float SHOVEL_TIME = 15.0;
@@ -265,6 +269,8 @@ typedef struct {
     Texture2D shield;
     Texture2D ice;
     Texture2D title;
+    Texture2D leftArrow;
+    Texture2D rightArrow;
 } Textures;
 
 typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
@@ -273,6 +279,10 @@ typedef struct {
     float time;
     MenuSelectedItem menuSelecteItem;
 } Title;
+
+typedef struct {
+    float time;
+} StageSummary;
 
 typedef enum { GMOnePlayer, GMTwoPlayers } GameMode;
 
@@ -302,6 +312,7 @@ typedef struct {
     void (*logic)();
     void (*draw)();
     Title title;
+    StageSummary stageSummary;
     GameMode mode;
 } Game;
 
@@ -506,6 +517,8 @@ static void drawGame() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.leftArrow = LoadTexture("textures/leftArrow.png");
+    game.textures.rightArrow = LoadTexture("textures/rightArrow.png");
     game.textures.title = LoadTexture("textures/title.png");
     game.textures.shield = LoadTexture("textures/shield.png");
     game.textures.powerups = LoadTexture("textures/powerup.png");
@@ -821,7 +834,6 @@ static void initGame() {
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
     game.powerUpSpecs[PUShield] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
-    initStage(35);
 }
 
 static void fireBullet(Tank *t) {
@@ -1208,11 +1220,10 @@ static void handlePlayerKill(Tank *t) {
 
 static void checkStageEnd() {
     if (!game.activeEnemyCount) {
-        if (game.stage == STAGE_COUNT) {
-            initStage(1);
-        } else {
-            initStage(game.stage + 1);
-        }
+        // if (true) {
+
+        game.logic = stageSummaryLogic;
+        game.draw = drawStageSummary;
     }
 }
 
@@ -1370,6 +1381,95 @@ void drawFloat(float x) {
     DrawText(buffer, 10, 10, 10, WHITE);
 }
 
+void stageSummaryLogic() {
+    game.stageSummary.time += game.frameTime;
+    if (IsKeyPressed(KEY_ENTER)) {
+        initStage(game.stage + 1);
+        game.logic = gameLogic;
+        game.draw = drawGame;
+    }
+}
+
+static int centerX(int size) { return (SCREEN_WIDTH - size) / 2; }
+
+void drawStageSummary() {
+    int topY = SCREEN_HEIGHT -
+               (SCREEN_HEIGHT - 150) *
+                   (MIN(game.stageSummary.time, STAGE_SUMMARY_SLIDE_TIME) /
+                    STAGE_SUMMARY_SLIDE_TIME);
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "STAGE %2d", game.stage);
+    int textSize = MeasureText(text, FONT_SIZE);
+    DrawText(text, centerX(textSize), topY, FONT_SIZE, WHITE);
+    int linePadding = 50;
+    int halfWidth = SCREEN_WIDTH / 2;
+    DrawText("I-PLAYER", (halfWidth - MeasureText(text, FONT_SIZE)) / 2,
+             topY + FONT_SIZE + linePadding, FONT_SIZE,
+             (Color){205, 62, 26, 255});
+    if (game.mode == GMTwoPlayers) {
+        DrawText("II-PLAYER",
+                 halfWidth + (halfWidth - MeasureText(text, FONT_SIZE)) / 2,
+                 topY + FONT_SIZE + linePadding, FONT_SIZE,
+                 (Color){205, 62, 26, 255});
+    }
+    int arrowWidth = game.textures.leftArrow.width;
+    int arrowDrawWidth = arrowWidth * 4;
+    int arrowHeight = game.textures.leftArrow.height;
+    int arrowDrawHeight = arrowHeight * 4;
+    int player1TotalKills = 0;
+    int player2TotalKills = 0;
+    for (int i = 2; i < TMax; i++) {
+        int y = topY + (FONT_SIZE + linePadding) * i;
+        Texture2D *tex = game.tankSpecs[i].texture;
+        int texX = 0;
+        int texY = game.tankSpecs[i].texRow * TANK_TEXTURE_SIZE;
+        int drawSize = TANK_TEXTURE_SIZE * 4;
+        int drawOffset = (TANK_SIZE - drawSize) / 2;
+        DrawTexturePro(
+            *tex, (Rectangle){texX, texY, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
+            (Rectangle){halfWidth - (drawSize / 2) + drawOffset,
+                        y - (drawSize - FONT_SIZE) / 2 + drawOffset, drawSize,
+                        drawSize},
+            (Vector2){}, 0, WHITE);
+        DrawTexturePro(
+            game.textures.leftArrow, (Rectangle){0, 0, arrowWidth, arrowHeight},
+            (Rectangle){halfWidth - (drawSize / 2) - 10 - arrowDrawWidth,
+                        y - (arrowDrawHeight - FONT_SIZE) / 2, arrowDrawWidth,
+                        arrowDrawHeight},
+            (Vector2){}, 0, WHITE);
+
+        int kills = game.playerScores[TPlayer1].kills[i];
+        player1TotalKills += kills;
+        snprintf(text, N, "%4d PTS  %2d", kills * game.tankSpecs[i].points,
+                 kills);
+        DrawText(text, halfWidth - MeasureText(text, FONT_SIZE) - 100, y,
+                 FONT_SIZE, WHITE);
+        if (game.mode == GMTwoPlayers) {
+            DrawTexturePro(game.textures.rightArrow,
+                           (Rectangle){0, 0, arrowWidth, arrowHeight},
+                           (Rectangle){halfWidth + (drawSize / 2) + 10,
+                                       y - (arrowDrawHeight - FONT_SIZE) / 2,
+                                       arrowDrawWidth, arrowDrawHeight},
+                           (Vector2){}, 0, WHITE);
+
+            kills = game.playerScores[TPlayer2].kills[i];
+            player2TotalKills += kills;
+            snprintf(text, N, "%2d  %4d PTS", kills * game.tankSpecs[i].points,
+                     kills);
+            DrawText(text, halfWidth + 100, y, FONT_SIZE, WHITE);
+        }
+    }
+    snprintf(text, N, "TOTAL %2d", player1TotalKills);
+    DrawText(text, halfWidth - MeasureText(text, FONT_SIZE) - 100,
+             topY + (FONT_SIZE + linePadding) * TMax, FONT_SIZE, WHITE);
+    if (game.mode == GMTwoPlayers) {
+        snprintf(text, N, "%2d", player2TotalKills);
+        DrawText(text, halfWidth + 100, topY + (FONT_SIZE + linePadding) * TMax,
+                 FONT_SIZE, WHITE);
+    }
+}
+
 void titleLogic() {
     game.title.time += game.frameTime;
     if (game.title.time > TITLE_SLIDE_TIME &&
@@ -1377,6 +1477,7 @@ void titleLogic() {
         game.title.menuSelecteItem = MOnePlayer;
     }
     if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+        game.title.time = TITLE_SLIDE_TIME;
         game.title.menuSelecteItem =
             game.title.menuSelecteItem % (MMax - 1) + 1;
     } else if (IsKeyPressed(KEY_ENTER)) {
