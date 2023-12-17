@@ -83,7 +83,7 @@ const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
 const float ENEMY_SPAWN_INTERVAL = 2.0f;
-const float SPAWNING_TIME = 1.0f;
+const float SPAWNING_TIME = 0.7f;
 const int POWERUP_POSITIONS_COUNT = 16;
 const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
     {(4 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
@@ -730,7 +730,8 @@ static void initUIElements() {
 static void spawnPlayer(Tank *t, bool resetTier) {
     t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
     t->direction = DUp;
-    t->status = TSActive;
+    t->status = TSSpawning;
+    t->shieldTimeLeft = 4;
     if (resetTier) {
         t->tier = 0;
         game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[0];
@@ -1551,11 +1552,12 @@ void gameLogic() {
         if (IsKeyPressed(KEY_ENTER)) {
             game.stageCurtainTime = 0.001;
         }
-        return;
     }
     if (game.stageCurtainTime && game.stageCurtainTime < STAGE_CURTAIN_TIME) {
         game.stageCurtainTime += game.frameTime;
     }
+    if (game.stageCurtainTime < STAGE_CURTAIN_TIME)
+        return;
     game.timeSinceSpawn += game.frameTime;
     if (game.timerPowerUpTimeLeft > 0) {
         game.timerPowerUpTimeLeft -= game.frameTime;
