@@ -44,6 +44,7 @@ const CellInfo fortressWall[] = {
 };
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
+const float GAME_OVER_TIME = 1;
 const float STAGE_CURTAIN_TIME = 1.5;
 const float STAGE_SUMMARY_SLIDE_TIME = 0.5;
 const float TIMER_TIME = 15.0;
@@ -52,11 +53,11 @@ const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
 const int STAGE_COUNT = 16;
-const int SCREEN_WIDTH = 1400;
-const int SCREEN_HEIGHT = 900;
 const int FIELD_COLS = 64;
 const int FIELD_ROWS = 56;
 const int CELL_SIZE = 16;
+const int SCREEN_WIDTH = FIELD_COLS * CELL_SIZE;
+const int SCREEN_HEIGHT = FIELD_ROWS * CELL_SIZE;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int FLAG_SIZE = TANK_SIZE;
@@ -249,6 +250,7 @@ typedef struct {
 
 typedef struct {
     Texture2D flag;
+    Texture2D deadFlag;
     Texture2D brick;
     Texture2D border;
     Texture2D concrete;
@@ -272,6 +274,7 @@ typedef struct {
     Texture2D title;
     Texture2D leftArrow;
     Texture2D rightArrow;
+    Texture2D gameOver;
 } Textures;
 
 typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
@@ -293,6 +296,7 @@ typedef struct {
     TankSpec tankSpecs[TMax];
     Bullet bullets[MAX_BULLET_COUNT];
     Vector2 flagPos;
+    bool isFlagDead;
     CellSpec cellSpecs[CTMax];
     PowerUpSpec powerUpSpecs[PUMax];
     Animation explosionAnimations[ETMax];
@@ -316,6 +320,7 @@ typedef struct {
     StageSummary stageSummary;
     GameMode mode;
     float stageCurtainTime;
+    float gameOverTime;
 } Game;
 
 static Game game;
@@ -400,7 +405,8 @@ static void drawTanks() {
 }
 
 static void drawFlag() {
-    Texture2D *tex = &game.textures.flag;
+    Texture2D *tex =
+        game.isFlagDead ? &game.textures.deadFlag : &game.textures.flag;
     DrawTexturePro(
         *tex, (Rectangle){0, 0, tex->width, tex->height},
         (Rectangle){game.flagPos.x, game.flagPos.y, FLAG_SIZE, FLAG_SIZE},
@@ -508,6 +514,18 @@ static void drawPowerUps() {
 
 static int centerX(int size) { return (SCREEN_WIDTH - size) / 2; }
 
+static void drawGameOver() {
+    if (!game.gameOverTime)
+        return;
+    Texture2D *tex = &game.textures.gameOver;
+    int w = tex->width * 4;
+    int h = tex->height * 4;
+    int y = SCREEN_HEIGHT -
+            (SCREEN_HEIGHT / 2 + h) * (game.gameOverTime / GAME_OVER_TIME);
+    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
+                   (Rectangle){centerX(w), y, w, h}, (Vector2){}, 0, WHITE);
+}
+
 static void drawStageCurtain() {
     if (game.stageCurtainTime >= STAGE_CURTAIN_TIME)
         return;
@@ -538,10 +556,13 @@ static void drawGame() {
     drawPowerUps();
     drawUI();
     drawStageCurtain();
+    drawGameOver();
 }
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.deadFlag = LoadTexture("textures/deadFlag.png");
+    game.textures.gameOver = LoadTexture("textures/gameOver.png");
     game.textures.leftArrow = LoadTexture("textures/leftArrow.png");
     game.textures.rightArrow = LoadTexture("textures/rightArrow.png");
     game.textures.title = LoadTexture("textures/title.png");
@@ -903,6 +924,11 @@ static void fireBullet(Tank *t) {
     }
 }
 
+static bool checkTankToFlagCollision(Tank *t) {
+    return collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, game.flagPos.x,
+                     game.flagPos.y, FLAG_SIZE, FLAG_SIZE);
+}
+
 static bool checkTankToTankCollision(Tank *t) {
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *tank = &game.tanks[i];
@@ -1079,6 +1105,8 @@ static void handlePowerUpHit(Tank *t) {
 }
 
 static void handleCommand(Tank *t, Command cmd) {
+    if (t->status != TSActive)
+        return;
     if (cmd.fire) {
         fireBullet(t);
     }
@@ -1122,7 +1150,7 @@ static void handleCommand(Tank *t, Command cmd) {
         }
     }
     handlePowerUpHit(t);
-    if (checkTankToTankCollision(t)) {
+    if (checkTankToTankCollision(t) || checkTankToFlagCollision(t)) {
         t->pos = prevPos;
         t->isMoving = false;
     } else {
@@ -1293,7 +1321,10 @@ static bool checkBulletToBulletCollision(Bullet *b) {
     return false;
 }
 
-static void destroyFlag() { createExplosion(ETBig, game.flagPos, FLAG_SIZE); }
+static void destroyFlag() {
+    createExplosion(ETBig, game.flagPos, FLAG_SIZE);
+    game.isFlagDead = true;
+}
 
 static bool checkFlagHit(Bullet *b) {
     if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, game.flagPos.x,
@@ -1306,8 +1337,10 @@ static bool checkFlagHit(Bullet *b) {
 }
 
 static void checkBulletCollision(Bullet *b) {
-    if (checkFlagHit(b))
+    if (checkFlagHit(b)) {
+        game.gameOverTime = 0.001;
         return;
+    }
     if (checkBulletToBulletCollision(b))
         return;
     checkBulletHit(b);
@@ -1558,6 +1591,9 @@ void gameLogic() {
     }
     if (game.stageCurtainTime < STAGE_CURTAIN_TIME)
         return;
+    if (game.gameOverTime && game.gameOverTime < GAME_OVER_TIME) {
+        game.gameOverTime += game.frameTime;
+    }
     game.timeSinceSpawn += game.frameTime;
     if (game.timerPowerUpTimeLeft > 0) {
         game.timerPowerUpTimeLeft -= game.frameTime;
