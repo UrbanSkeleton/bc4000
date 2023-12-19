@@ -44,9 +44,10 @@ const CellInfo fortressWall[] = {
 };
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
-const float GAME_OVER_TIME = 1;
+const float GAME_OVER_SLIDE_TIME = 1;
+const float GAME_OVER_DELAY = 3;
 const float STAGE_CURTAIN_TIME = 1.5;
-const float STAGE_SUMMARY_SLIDE_TIME = 0.5;
+const float STAGE_SUMMARY_SLIDE_TIME = 0.001;
 const float TIMER_TIME = 15.0;
 const float SHIELD_TIME = 15.0;
 const float SHOVEL_TIME = 15.0;
@@ -520,8 +521,9 @@ static void drawGameOver() {
     Texture2D *tex = &game.textures.gameOver;
     int w = tex->width * 4;
     int h = tex->height * 4;
-    int y = SCREEN_HEIGHT -
-            (SCREEN_HEIGHT / 2 + h) * (game.gameOverTime / GAME_OVER_TIME);
+    int y =
+        SCREEN_HEIGHT - (SCREEN_HEIGHT / 2 + h) *
+                            MIN(game.gameOverTime / GAME_OVER_SLIDE_TIME, 1);
     DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
                    (Rectangle){centerX(w), y, w, h}, (Vector2){}, 0, WHITE);
 }
@@ -1191,6 +1193,8 @@ static void handleAI() {
 }
 
 static void handleInput() {
+    if (game.gameOverTime > 0)
+        return;
     Command cmd = {};
     if (IsKeyDown(KEY_RIGHT)) {
         cmd.move = true;
@@ -1263,18 +1267,22 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
     }
 }
 
+static void gameOver() { game.gameOverTime = 0.001; }
+
 static void handlePlayerKill(Tank *t) {
     if (game.tankSpecs[t->type].isEnemy)
         return;
-    if (t->lifes == -1) {
-        t->lifes = 2;
+    if (t->lifes < 0) {
+        gameOver();
+        return;
     }
     spawnPlayer(t, true);
     updatePlayerLifesUI();
 }
 
 static void checkStageEnd() {
-    if (!game.activeEnemyCount) {
+    if (!game.activeEnemyCount ||
+        game.gameOverTime >= GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
         // if (true) {
 
         game.logic = stageSummaryLogic;
@@ -1338,7 +1346,7 @@ static bool checkFlagHit(Bullet *b) {
 
 static void checkBulletCollision(Bullet *b) {
     if (checkFlagHit(b)) {
-        game.gameOverTime = 0.001;
+        gameOver();
         return;
     }
     if (checkBulletToBulletCollision(b))
@@ -1591,7 +1599,8 @@ void gameLogic() {
     }
     if (game.stageCurtainTime < STAGE_CURTAIN_TIME)
         return;
-    if (game.gameOverTime && game.gameOverTime < GAME_OVER_TIME) {
+    if (game.gameOverTime &&
+        game.gameOverTime < GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
         game.gameOverTime += game.frameTime;
     }
     game.timeSinceSpawn += game.frameTime;
