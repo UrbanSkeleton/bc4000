@@ -6,9 +6,11 @@
 
 #include "utils.c"
 
-void gameLogic();
-void stageSummaryLogic();
-void drawStageSummary();
+static void gameLogic();
+static void stageSummaryLogic();
+static void drawStageSummary();
+static void titleLogic();
+static void drawTitle();
 
 // #define DRAW_CELL_GRID
 
@@ -45,6 +47,7 @@ const CellInfo fortressWall[] = {
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
 const float GAME_OVER_SLIDE_TIME = 1;
+const float GAME_OVER_CURTAIN_TIME = 5;
 const float GAME_OVER_DELAY = 3;
 const float STAGE_CURTAIN_TIME = 1.5;
 const float STAGE_SUMMARY_SLIDE_TIME = 0.001;
@@ -276,6 +279,7 @@ typedef struct {
     Texture2D leftArrow;
     Texture2D rightArrow;
     Texture2D gameOver;
+    Texture2D gameOverCurtain;
 } Textures;
 
 typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
@@ -290,6 +294,8 @@ typedef struct {
 } StageSummary;
 
 typedef enum { GMOnePlayer, GMTwoPlayers } GameMode;
+
+// typedef enum {GSTitle, GSStageCurtain, GSPlaying, }
 
 typedef struct {
     Cell field[FIELD_ROWS][FIELD_COLS];
@@ -322,6 +328,7 @@ typedef struct {
     GameMode mode;
     float stageCurtainTime;
     float gameOverTime;
+    float gameOverCurtainTime;
 } Game;
 
 static Game game;
@@ -565,6 +572,7 @@ static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
     game.textures.deadFlag = LoadTexture("textures/deadFlag.png");
     game.textures.gameOver = LoadTexture("textures/gameOver.png");
+    game.textures.gameOverCurtain = LoadTexture("textures/gameOverCurtain.png");
     game.textures.leftArrow = LoadTexture("textures/leftArrow.png");
     game.textures.rightArrow = LoadTexture("textures/rightArrow.png");
     game.textures.title = LoadTexture("textures/title.png");
@@ -764,6 +772,9 @@ static void spawnPlayer(Tank *t, bool resetTier) {
 
 static void initStage(char stage) {
     game.stage = stage;
+    game.isFlagDead = false;
+    game.gameOverTime = 0;
+    game.gameOverCurtainTime = 0;
     game.stageCurtainTime = 0;
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
@@ -1193,6 +1204,11 @@ static void handleAI() {
 }
 
 static void handleInput() {
+    if (game.gameOverTime > 0 && IsKeyPressed(KEY_ENTER)) {
+        game.logic = stageSummaryLogic;
+        game.draw = drawStageSummary;
+        return;
+    }
     if (game.gameOverTime > 0)
         return;
     Command cmd = {};
@@ -1443,22 +1459,50 @@ static void updateGameState() {
     checkStageEnd();
 }
 
-void drawFloat(float x) {
-    char buffer[20];
-    snprintf(buffer, 20, "%f", x);
-    DrawText(buffer, 10, 10, 10, WHITE);
-}
+// static void drawFloat(float x) {
+//     char buffer[20];
+//     snprintf(buffer, 20, "%f", x);
+//     DrawText(buffer, 10, 10, 10, WHITE);
+// }
 
-void stageSummaryLogic() {
-    game.stageSummary.time += game.frameTime;
-    if (IsKeyPressed(KEY_ENTER)) {
-        initStage(game.stage + 1);
-        game.logic = gameLogic;
-        game.draw = drawGame;
+static void gameOverCurtainLogic() {
+    if (game.gameOverCurtainTime < GAME_OVER_CURTAIN_TIME) {
+        game.gameOverCurtainTime += game.frameTime;
+    }
+    if (game.gameOverCurtainTime >= GAME_OVER_CURTAIN_TIME ||
+        IsKeyPressed(KEY_ENTER)) {
+        game.gameOverCurtainTime = 0;
+        game.logic = titleLogic;
+        game.draw = drawTitle;
     }
 }
 
-void drawStageSummary() {
+static void drawGameOverCurtain() {
+    Texture2D *tex = &game.textures.gameOverCurtain;
+    int drawWidth = tex->width * 2;
+    int drawHeight = tex->height * 2;
+    int x = (SCREEN_WIDTH - drawWidth) / 2;
+    int y = (SCREEN_HEIGHT - drawHeight) / 2;
+    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
+                   (Rectangle){x, y, drawWidth, drawHeight}, (Vector2){}, 0,
+                   WHITE);
+}
+
+static void stageSummaryLogic() {
+    game.stageSummary.time += game.frameTime;
+    if (IsKeyPressed(KEY_ENTER)) {
+        if (game.gameOverTime) {
+            game.logic = gameOverCurtainLogic;
+            game.draw = drawGameOverCurtain;
+        } else {
+            initStage(game.stage + 1);
+            game.logic = gameLogic;
+            game.draw = drawGame;
+        }
+    }
+}
+
+static void drawStageSummary() {
     int topY = SCREEN_HEIGHT -
                (SCREEN_HEIGHT - 150) *
                    (MIN(game.stageSummary.time, STAGE_SUMMARY_SLIDE_TIME) /
@@ -1536,7 +1580,7 @@ void drawStageSummary() {
     }
 }
 
-void titleLogic() {
+static void titleLogic() {
     game.title.time += game.frameTime;
     if (game.title.time > TITLE_SLIDE_TIME &&
         game.title.menuSelecteItem == MNone) {
@@ -1555,15 +1599,18 @@ void titleLogic() {
             game.mode = GMTwoPlayers;
             break;
         default:
-            break;
+            game.title.time = TITLE_SLIDE_TIME;
+            return;
+            ;
         }
+        game.title = (Title){0};
         game.logic = gameLogic;
         game.draw = drawGame;
         initStage(1);
     }
 }
 
-void drawTitle() {
+static void drawTitle() {
     int topY = 200;
     Texture2D *tex = &game.textures.title;
     int titleTexHeight = tex->height;
@@ -1588,7 +1635,7 @@ void drawTitle() {
     }
 }
 
-void gameLogic() {
+static void gameLogic() {
     if (!game.stageCurtainTime) {
         if (IsKeyPressed(KEY_ENTER)) {
             game.stageCurtainTime = 0.001;
