@@ -49,7 +49,7 @@ const float TITLE_SLIDE_TIME = 1;
 const float GAME_OVER_SLIDE_TIME = 1;
 const float GAME_OVER_CURTAIN_TIME = 5;
 const float GAME_OVER_DELAY = 3;
-const float STAGE_CURTAIN_TIME = 1.5;
+const float STAGE_CURTAIN_TIME = 2;
 const float STAGE_SUMMARY_SLIDE_TIME = 0.001;
 const float TIMER_TIME = 15.0;
 const float SHIELD_TIME = 15.0;
@@ -218,7 +218,7 @@ typedef struct {
     float maxTtl;
 } Explosion;
 
-typedef enum { BTNone, BTPlayer, BTEnemy } BulletType;
+typedef enum { BTNone, BTTank } BulletType;
 
 typedef struct {
     Vector2 pos;
@@ -282,6 +282,20 @@ typedef struct {
     Texture2D gameOverCurtain;
 } Textures;
 
+typedef struct {
+    Sound big_explosion;
+    Sound bullet_explosion;
+    Sound bullet_hit_1;
+    Sound bullet_hit_2;
+    Sound game_over;
+    Sound game_pause;
+    Sound mode_switch;
+    Sound player_fire;
+    Sound powerup_appear;
+    Sound powerup_pick;
+    Sound start_menu;
+} Sounds;
+
 typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
 
 typedef struct {
@@ -309,6 +323,7 @@ typedef struct {
     Animation explosionAnimations[ETMax];
     Explosion explosions[MAX_EXPLOSION_COUNT];
     Textures textures;
+    Sounds sounds;
     float frameTime;
     float totalTime;
     float timeSinceSpawn;
@@ -329,9 +344,12 @@ typedef struct {
     float stageCurtainTime;
     float gameOverTime;
     float gameOverCurtainTime;
+    bool isStageCurtainSoundPlayed;
 } Game;
 
 static Game game;
+
+static bool isEnemy(Tank *t) { return game.tankSpecs[t->type].isEnemy; }
 
 static void drawCell(Cell *cell) {
     Texture2D *tex = game.cellSpecs[cell->type].texture;
@@ -538,7 +556,7 @@ static void drawGameOver() {
 static void drawStageCurtain() {
     if (game.stageCurtainTime >= STAGE_CURTAIN_TIME)
         return;
-    float delayTime = 1;
+    float delayTime = STAGE_CURTAIN_TIME - 0.5;
     int visibleHeight =
         SCREEN_HEIGHT * (MAX(game.stageCurtainTime - delayTime, 0) /
                          (STAGE_CURTAIN_TIME - delayTime));
@@ -566,6 +584,20 @@ static void drawGame() {
     drawUI();
     drawStageCurtain();
     drawGameOver();
+}
+
+static void loadSounds() {
+    game.sounds.big_explosion = LoadSound("sounds/big_explosion.ogg");
+    game.sounds.bullet_explosion = LoadSound("sounds/bullet_explosion.ogg");
+    game.sounds.bullet_hit_1 = LoadSound("sounds/bullet_hit_1.ogg");
+    game.sounds.bullet_hit_2 = LoadSound("sounds/bullet_hit_2.ogg");
+    game.sounds.game_over = LoadSound("sounds/game_over.ogg");
+    game.sounds.game_pause = LoadSound("sounds/game_pause.ogg");
+    game.sounds.mode_switch = LoadSound("sounds/mode_switch.ogg");
+    game.sounds.player_fire = LoadSound("sounds/player_fire.ogg");
+    game.sounds.powerup_appear = LoadSound("sounds/powerup_appear.ogg");
+    game.sounds.powerup_pick = LoadSound("sounds/powerup_pick.ogg");
+    game.sounds.start_menu = LoadSound("sounds/start_menu.ogg");
 }
 
 static void loadTextures() {
@@ -776,6 +808,7 @@ static void initStage(char stage) {
     game.gameOverTime = 0;
     game.gameOverCurtainTime = 0;
     game.stageCurtainTime = 0;
+    game.isStageCurtainSoundPlayed = false;
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             game.field[i][j] =
@@ -827,6 +860,7 @@ static void initStage(char stage) {
 
 static void initGame() {
     loadTextures();
+    loadSounds();
     game.explosionAnimations[ETBullet] =
         (Animation){.duration = BULLET_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bulletExplosions),
@@ -901,13 +935,16 @@ static void fireBullet(Tank *t) {
     if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount)
         return;
     t->firedBulletCount++;
+    if (!isEnemy(t)) {
+        PlaySound(game.sounds.player_fire);
+    }
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
         if (b->type != BTNone) {
             assert(i != MAX_BULLET_COUNT - 1);
             continue;
         }
-        b->type = BTPlayer;
+        b->type = BTTank;
         b->direction = t->direction;
         b->tank = t;
         short bulletSpeed = game.tankSpecs[t->type].bulletSpeed;
@@ -1042,7 +1079,7 @@ static void createExplosion(ExplosionType type, Vector2 targetPos,
 static void destroyTank(Tank *t) {
     t->status = TSDead;
     t->lifes--;
-    if (game.tankSpecs[t->type].isEnemy) {
+    if (isEnemy(t)) {
         game.activeEnemyCount--;
     }
     if (t->powerUp) {
@@ -1060,7 +1097,7 @@ static void destroyAllTanks() {
 }
 
 static void handlePowerUpHit(Tank *t) {
-    if (game.tankSpecs[t->type].isEnemy)
+    if (isEnemy(t))
         return;
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         PowerUp *p = &game.powerUps[i];
@@ -1068,6 +1105,7 @@ static void handlePowerUpHit(Tank *t) {
             collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, p->pos.x,
                       p->pos.y, POWER_UP_SIZE, POWER_UP_SIZE)) {
             p->isActive = false;
+            PlaySound(game.sounds.powerup_pick);
             t->playerScore->totalScore += POWERUP_SCORE;
             switch (p->type) {
             case PUTank:
@@ -1239,12 +1277,17 @@ static void destroyBullet(Bullet *b, bool explosion) {
     }
 }
 
-static void destroyBrick(int row, int col, bool destroyConcrete) {
+static void destroyBrick(int row, int col, bool destroyConcrete,
+                         bool playSound) {
     if (row < 0 || row >= FIELD_ROWS || col < 0 || col >= FIELD_COLS)
         return;
     if (game.field[row][col].type == CTBrick ||
-        (destroyConcrete && game.field[row][col].type == CTConcrete))
+        (destroyConcrete && game.field[row][col].type == CTConcrete)) {
         game.field[row][col].type = CTBlank;
+        if (playSound) {
+            PlaySound(game.sounds.bullet_hit_2);
+        }
+    }
 }
 
 static void checkBulletRows(Bullet *b, int startRow, int endRow, int col,
@@ -1255,9 +1298,9 @@ static void checkBulletRows(Bullet *b, int startRow, int endRow, int col,
             destroyBullet(b, true);
             bool destroyConcrete = b->tank->tier == 3;
             for (int rr = startRow - 1; rr <= endRow + 1; rr++) {
-                destroyBrick(rr, col, destroyConcrete);
+                destroyBrick(rr, col, destroyConcrete, !isEnemy(b->tank));
                 if (destroyConcrete) {
-                    destroyBrick(rr, nextCol, destroyConcrete);
+                    destroyBrick(rr, nextCol, destroyConcrete, false);
                 }
             }
             return;
@@ -1273,9 +1316,9 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
             destroyBullet(b, true);
             bool destroyConcrete = b->tank->tier == 3;
             for (int cc = startCol - 1; cc <= endCol + 1; cc++) {
-                destroyBrick(row, cc, destroyConcrete);
+                destroyBrick(row, cc, destroyConcrete, !isEnemy(b->tank));
                 if (destroyConcrete) {
-                    destroyBrick(nextRow, cc, destroyConcrete);
+                    destroyBrick(nextRow, cc, destroyConcrete, false);
                 }
             }
             return;
@@ -1286,7 +1329,7 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
 static void gameOver() { game.gameOverTime = 0.001; }
 
 static void handlePlayerKill(Tank *t) {
-    if (game.tankSpecs[t->type].isEnemy)
+    if (isEnemy(t))
         return;
     if (t->lifes < 0) {
         gameOver();
@@ -1310,8 +1353,7 @@ static void checkBulletHit(Bullet *b) {
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *t = &game.tanks[i];
         if (t->status != TSActive || b->tank == t ||
-            (game.tankSpecs[b->tank->type].isEnemy &&
-             game.tankSpecs[t->type].isEnemy))
+            (isEnemy(b->tank) && isEnemy(t)))
             continue;
         if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, t->pos.x,
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
@@ -1319,11 +1361,15 @@ static void checkBulletHit(Bullet *b) {
             if (t->shieldTimeLeft <= 0) {
                 destroyTank(t);
                 handlePlayerKill(t);
-            }
-            if (!game.tankSpecs[b->tank->type].isEnemy) {
-                game.playerScores[b->tank->type].totalScore +=
-                    game.tankSpecs[t->type].points;
-                game.playerScores[b->tank->type].kills[t->type]++;
+                if (!isEnemy(b->tank)) {
+                    game.playerScores[b->tank->type].totalScore +=
+                        game.tankSpecs[t->type].points;
+                    game.playerScores[b->tank->type].kills[t->type]++;
+                }
+                PlaySound(isEnemy(t)
+                              ? (t->powerUp ? game.sounds.powerup_appear
+                                            : game.sounds.bullet_explosion)
+                              : game.sounds.big_explosion);
             }
             break;
         }
@@ -1355,6 +1401,7 @@ static bool checkFlagHit(Bullet *b) {
                   game.flagPos.y, FLAG_SIZE, FLAG_SIZE)) {
         destroyBullet(b, true);
         destroyFlag();
+        PlaySound(game.sounds.big_explosion);
         return true;
     }
     return false;
@@ -1492,6 +1539,7 @@ static void stageSummaryLogic() {
     game.stageSummary.time += game.frameTime;
     if (IsKeyPressed(KEY_ENTER)) {
         if (game.gameOverTime) {
+            PlaySound(game.sounds.game_over);
             game.logic = gameOverCurtainLogic;
             game.draw = drawGameOverCurtain;
         } else {
@@ -1587,6 +1635,7 @@ static void titleLogic() {
         game.title.menuSelecteItem = MOnePlayer;
     }
     if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+        PlaySound(game.sounds.mode_switch);
         game.title.time = TITLE_SLIDE_TIME;
         game.title.menuSelecteItem =
             game.title.menuSelecteItem % (MMax - 1) + 1;
@@ -1641,6 +1690,10 @@ static void gameLogic() {
             game.stageCurtainTime = 0.001;
         }
     }
+    if (game.stageCurtainTime && !game.isStageCurtainSoundPlayed) {
+        PlaySound(game.sounds.start_menu);
+        game.isStageCurtainSoundPlayed = true;
+    }
     if (game.stageCurtainTime && game.stageCurtainTime < STAGE_CURTAIN_TIME) {
         game.stageCurtainTime += game.frameTime;
     }
@@ -1680,6 +1733,7 @@ int main(void) {
 
     SetTraceLogLevel(LOG_NONE);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
+    InitAudioDevice();
 
     initGame();
 
@@ -1689,7 +1743,6 @@ int main(void) {
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
-        game.frameTime = GetFrameTime();
         game.totalTime = GetTime();
 
         game.logic();
@@ -1698,8 +1751,10 @@ int main(void) {
         game.draw();
         // drawFloat(game.tanks[0].shieldTimeLeft);
         EndDrawing();
+        game.frameTime = GetFrameTime();
     }
 
+    CloseAudioDevice();
     CloseWindow();
 
     return 0;
