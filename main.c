@@ -280,6 +280,7 @@ typedef struct {
     Texture2D rightArrow;
     Texture2D gameOver;
     Texture2D gameOverCurtain;
+    Texture2D pause;
 } Textures;
 
 typedef struct {
@@ -345,6 +346,7 @@ typedef struct {
     float gameOverTime;
     float gameOverCurtainTime;
     bool isStageCurtainSoundPlayed;
+    bool isPaused;
 } Game;
 
 static Game game;
@@ -539,6 +541,7 @@ static void drawPowerUps() {
 }
 
 static int centerX(int size) { return (SCREEN_WIDTH - size) / 2; }
+static int centerY(int size) { return (SCREEN_HEIGHT - size) / 2; }
 
 static void drawGameOver() {
     if (!game.gameOverTime)
@@ -573,6 +576,17 @@ static void drawStageCurtain() {
     }
 }
 
+static void drawPause() {
+    if (!game.isPaused || ((long)(game.totalTime * 2)) % 2)
+        return;
+    Texture2D *tex = &game.textures.pause;
+    int w = tex->width * 4;
+    int h = tex->height * 4;
+    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
+                   (Rectangle){centerX(w), centerY(h), w, h}, (Vector2){}, 0,
+                   WHITE);
+}
+
 static void drawGame() {
     drawField();
     drawBullets();
@@ -584,6 +598,7 @@ static void drawGame() {
     drawUI();
     drawStageCurtain();
     drawGameOver();
+    drawPause();
 }
 
 static void loadSounds() {
@@ -602,6 +617,7 @@ static void loadSounds() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/flag.png");
+    game.textures.pause = LoadTexture("textures/pause.png");
     game.textures.deadFlag = LoadTexture("textures/deadFlag.png");
     game.textures.gameOver = LoadTexture("textures/gameOver.png");
     game.textures.gameOverCurtain = LoadTexture("textures/gameOverCurtain.png");
@@ -1698,6 +1714,14 @@ static void gameLogic() {
         game.stageCurtainTime += game.frameTime;
     }
     if (game.stageCurtainTime < STAGE_CURTAIN_TIME)
+        return;
+    if (IsKeyPressed(KEY_ENTER)) {
+        game.isPaused = !game.isPaused;
+        if (game.isPaused) {
+            PlaySound(game.sounds.game_pause);
+        }
+    }
+    if (game.isPaused)
         return;
     if (game.gameOverTime &&
         game.gameOverTime < GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
