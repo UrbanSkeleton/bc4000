@@ -818,6 +818,46 @@ static void spawnPlayer(Tank *t, bool resetTier) {
     }
 }
 
+static TankType levelTanks[35][MAX_ENEMY_COUNT] = {
+    // clang-format off
+    {TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TFast,TFast},
+    {TArmor,TArmor,TFast, TFast, TFast, TFast, TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic},
+    {TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TFast, TFast, TFast, TFast, TArmor,TArmor},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TBasic,TBasic,TArmor,TArmor,TArmor},
+    {TPower,TPower,TPower,TPower,TPower,TArmor,TArmor,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TFast, TFast, TFast, TFast, TFast},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TArmor,TArmor},
+    {TBasic,TBasic,TBasic,TFast, TFast, TFast, TFast, TPower,TPower,TPower,TPower,TPower,TPower,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TArmor,TArmor,TFast, TFast, TFast, TFast, TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic},
+    {TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TFast, TFast, TFast, TFast, TPower,TPower,TPower,TPower,TPower,TPower,TPower,TArmor,TArmor,TArmor},
+    {TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TFast, TFast, TPower,TPower,TPower,TPower,TArmor,TArmor},
+    {TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor},
+    {TBasic,TBasic,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor},
+    {TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TFast, TFast, TArmor,TArmor},
+    {TArmor,TArmor,TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic},
+    {TArmor,TArmor,TArmor,TArmor,TBasic,TBasic,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast},
+    {TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TBasic,TBasic,TBasic,TBasic,TPower,TPower,TPower,TPower},
+    {TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TBasic,TBasic,TPower,TPower,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TArmor,TArmor,TArmor,TArmor},
+    {TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TPower,TPower,TArmor,TArmor,TArmor,TArmor},
+    {TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast},
+    {TPower,TPower,TPower,TPower,TArmor,TArmor,TFast, TFast, TFast, TFast, TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic},
+    {TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor},
+    {TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TBasic,TBasic,TBasic,TBasic,TPower,TPower,TPower,TPower},
+    {TPower,TPower,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TBasic,TBasic},
+    {TFast, TFast, TArmor,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TPower,TPower},
+    {TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor},
+    {TBasic,TBasic,TBasic,TBasic,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TPower,TPower,TPower,TPower,TArmor,TArmor,TArmor,TArmor},
+    {TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TPower,TPower,TPower},
+    {TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TPower,TPower,TFast, TFast, TFast, TFast},
+    {TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast},
+    {TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor},
+    {TPower,TPower,TPower,TPower,TFast, TFast, TFast, TFast, TFast, TFast, TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor,TArmor}
+    // clang-format on
+};
+
 static void initStage(char stage) {
     game.stage = stage;
     game.isFlagDead = false;
@@ -847,7 +887,7 @@ static void initStage(char stage) {
                                    FIELD_COLS - 8 - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
         game.tanks[i + 2] = (Tank){
-            .type = TBasic,
+            .type = levelTanks[stage - 1][i],
             .pos = (Vector2){CELL_SIZE * startingCols[i % 3], CELL_SIZE * 2},
             .direction = DDown,
             .status = TSPending,
@@ -1295,14 +1335,31 @@ static void destroyBullet(Bullet *b, bool explosion) {
 
 static void destroyBrick(int row, int col, bool destroyConcrete,
                          bool playSound) {
-    if (row < 0 || row >= FIELD_ROWS || col < 0 || col >= FIELD_COLS)
-        return;
-    if (game.field[row][col].type == CTBrick ||
-        (destroyConcrete && game.field[row][col].type == CTConcrete)) {
+    switch (game.field[row][col].type) {
+    case CTBorder:
+        if (playSound) {
+            PlaySound(game.sounds.bullet_hit_1);
+            break;
+        }
+    case CTBrick:
         game.field[row][col].type = CTBlank;
         if (playSound) {
             PlaySound(game.sounds.bullet_hit_2);
         }
+        break;
+    case CTConcrete:
+        if (destroyConcrete) {
+            game.field[row][col].type = CTBlank;
+            if (playSound) {
+                PlaySound(game.sounds.bullet_hit_2);
+            }
+        } else {
+            if (playSound) {
+                PlaySound(game.sounds.bullet_hit_1);
+            }
+        }
+    default:
+        break;
     }
 }
 
