@@ -1625,7 +1625,7 @@ static void stageSummaryLogic() {
 
 static void drawStageSummary() {
     int topY = SCREEN_HEIGHT -
-               (SCREEN_HEIGHT - 150) *
+               (SCREEN_HEIGHT - 100) *
                    (MIN(game.stageSummary.time, STAGE_SUMMARY_SLIDE_TIME) /
                     STAGE_SUMMARY_SLIDE_TIME);
     static const int N = 256;
@@ -1633,16 +1633,27 @@ static void drawStageSummary() {
     snprintf(text, N, "STAGE %2d", game.stage);
     int textSize = MeasureText(text, FONT_SIZE);
     DrawText(text, centerX(textSize), topY, FONT_SIZE, WHITE);
-    int linePadding = 50;
+    int linePadding = 40;
     int halfWidth = SCREEN_WIDTH / 2;
-    DrawText("I-PLAYER", (halfWidth - MeasureText(text, FONT_SIZE)) / 2,
-             topY + FONT_SIZE + linePadding, FONT_SIZE,
+    int pX = (halfWidth - MeasureText("I-PLAYER", FONT_SIZE)) / 2;
+    DrawText("I-PLAYER", pX, topY + FONT_SIZE + linePadding, FONT_SIZE,
              (Color){205, 62, 26, 255});
+
+    // Player score
+    snprintf(text, N, "%d", game.playerScores[TPlayer1].totalScore);
+    DrawText(text, (halfWidth - MeasureText(text, FONT_SIZE) - pX),
+             topY + (FONT_SIZE + linePadding) * 2, FONT_SIZE,
+             (Color){241, 159, 80, 255});
+
     if (game.mode == GMTwoPlayers) {
-        DrawText("II-PLAYER",
-                 halfWidth + (halfWidth - MeasureText(text, FONT_SIZE)) / 2,
-                 topY + FONT_SIZE + linePadding, FONT_SIZE,
-                 (Color){205, 62, 26, 255});
+        int pX = (halfWidth - MeasureText("II-PLAYER", FONT_SIZE)) / 2;
+        DrawText("II-PLAYER", halfWidth + pX, topY + FONT_SIZE + linePadding,
+                 FONT_SIZE, (Color){205, 62, 26, 255});
+
+        // Player score
+        snprintf(text, N, "%d", game.playerScores[TPlayer2].totalScore);
+        DrawText(text, (halfWidth + pX), topY + (FONT_SIZE + linePadding) * 2,
+                 FONT_SIZE, (Color){241, 159, 80, 255});
     }
     int arrowWidth = game.textures.leftArrow.width;
     int arrowDrawWidth = arrowWidth * 4;
@@ -1651,7 +1662,7 @@ static void drawStageSummary() {
     int player1TotalKills = 0;
     int player2TotalKills = 0;
     for (int i = 2; i < TMax; i++) {
-        int y = topY + (FONT_SIZE + linePadding) * i;
+        int y = topY + (FONT_SIZE + linePadding) * (i + 1);
         Texture2D *tex = game.tankSpecs[i].texture;
         int texX = 0;
         int texY = game.tankSpecs[i].texRow * TANK_TEXTURE_SIZE;
@@ -1693,7 +1704,7 @@ static void drawStageSummary() {
     }
     snprintf(text, N, "TOTAL %2d", player1TotalKills);
     DrawText(text, halfWidth - MeasureText(text, FONT_SIZE) - 100,
-             topY + (FONT_SIZE + linePadding) * TMax, FONT_SIZE, WHITE);
+             topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE, WHITE);
     if (game.mode == GMTwoPlayers) {
         snprintf(text, N, "%2d", player2TotalKills);
         DrawText(text, halfWidth + 100, topY + (FONT_SIZE + linePadding) * TMax,
