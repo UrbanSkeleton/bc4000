@@ -1339,8 +1339,8 @@ static void destroyBrick(int row, int col, bool destroyConcrete,
     case CTBorder:
         if (playSound) {
             PlaySound(game.sounds.bullet_hit_1);
-            break;
         }
+        break;
     case CTBrick:
         game.field[row][col].type = CTBlank;
         if (playSound) {
@@ -1358,6 +1358,7 @@ static void destroyBrick(int row, int col, bool destroyConcrete,
                 PlaySound(game.sounds.bullet_hit_1);
             }
         }
+        break;
     default:
         break;
     }
@@ -1413,7 +1414,7 @@ static void handlePlayerKill(Tank *t) {
 }
 
 static void checkStageEnd() {
-    if (!game.activeEnemyCount ||
+    if (game.pendingEnemyCount + game.activeEnemyCount == 0 ||
         game.gameOverTime >= GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
         // if (true) {
 
