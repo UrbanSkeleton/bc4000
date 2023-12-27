@@ -192,7 +192,6 @@ typedef struct {
     bool isMoving;
     char lifes;
     PowerUp *powerUp;
-    PlayerScore *playerScore;
     char tier;
     float shieldTimeLeft;
 } Tank;
@@ -347,6 +346,7 @@ typedef struct {
     float gameOverCurtainTime;
     bool isStageCurtainSoundPlayed;
     bool isPaused;
+    int hiScore;
 } Game;
 
 static Game game;
@@ -873,13 +873,9 @@ static void initStage(char stage) {
         }
     }
     loadStage(game.stage);
-    game.tanks[0] = (Tank){
-        .type = TPlayer1, .lifes = 2, .playerScore = &game.playerScores[0]};
+    game.tanks[0] = (Tank){.type = TPlayer1, .lifes = 2};
     spawnPlayer(&game.tanks[0], false);
-    game.tanks[1] = (Tank){.type = TPlayer2,
-                           .lifes = 2,
-                           .status = TSPending,
-                           .playerScore = &game.playerScores[1]};
+    game.tanks[1] = (Tank){.type = TPlayer2, .lifes = 2, .status = TSPending};
     if (game.mode == GMTwoPlayers) {
         spawnPlayer(&game.tanks[1], false);
     }
@@ -914,7 +910,16 @@ static void initStage(char stage) {
     initUIElements();
 }
 
+static void loadHiScore() {
+    Buffer b = readFile("hiscore");
+    if (b.size < 4)
+        return;
+    game.hiScore = (int)b.bytes[0] | ((int)b.bytes[1] << 8) |
+                   ((int)b.bytes[2] << 16) | ((int)b.bytes[3] << 24);
+}
+
 static void initGame() {
+    loadHiScore();
     loadTextures();
     loadSounds();
     game.explosionAnimations[ETBullet] =
@@ -1152,6 +1157,11 @@ static void destroyAllTanks() {
     }
 }
 
+static void addScore(TankType type, int score) {
+    game.playerScores[type].totalScore += score;
+    game.hiScore = MAX(game.hiScore, game.playerScores[type].totalScore);
+}
+
 static void handlePowerUpHit(Tank *t) {
     if (isEnemy(t))
         return;
@@ -1162,7 +1172,7 @@ static void handlePowerUpHit(Tank *t) {
                       p->pos.y, POWER_UP_SIZE, POWER_UP_SIZE)) {
             p->isActive = false;
             PlaySound(game.sounds.powerup_pick);
-            t->playerScore->totalScore += POWERUP_SCORE;
+            addScore(t->type, POWERUP_SCORE);
             switch (p->type) {
             case PUTank:
                 t->lifes++;
@@ -1436,8 +1446,7 @@ static void checkBulletHit(Bullet *b) {
                 destroyTank(t);
                 handlePlayerKill(t);
                 if (!isEnemy(b->tank)) {
-                    game.playerScores[b->tank->type].totalScore +=
-                        game.tankSpecs[t->type].points;
+                    addScore(b->tank->type, game.tankSpecs[t->type].points);
                     game.playerScores[b->tank->type].kills[t->type]++;
                 }
                 PlaySound(isEnemy(t)
@@ -1626,14 +1635,24 @@ static void stageSummaryLogic() {
 
 static void drawStageSummary() {
     int topY = SCREEN_HEIGHT -
-               (SCREEN_HEIGHT - 100) *
+               (SCREEN_HEIGHT - 30) *
                    (MIN(game.stageSummary.time, STAGE_SUMMARY_SLIDE_TIME) /
                     STAGE_SUMMARY_SLIDE_TIME);
     static const int N = 256;
     char text[N];
+
+    snprintf(text, N, "HI-SCORE  %7d", game.hiScore);
+    int x = centerX(MeasureText(text, FONT_SIZE));
+    DrawText("HI-SCORE", x, topY, FONT_SIZE, (Color){205, 62, 26, 255});
+    snprintf(text, N, "%7d", game.hiScore);
+    DrawText(text, x + MeasureText("HI-SCORE  ", FONT_SIZE), topY, FONT_SIZE,
+             (Color){241, 159, 80, 255});
+    topY += 70;
+
     snprintf(text, N, "STAGE %2d", game.stage);
-    int textSize = MeasureText(text, FONT_SIZE);
-    DrawText(text, centerX(textSize), topY, FONT_SIZE, WHITE);
+    DrawText(text, centerX(MeasureText(text, FONT_SIZE)), topY, FONT_SIZE,
+             WHITE);
+
     int linePadding = 40;
     int halfWidth = SCREEN_WIDTH / 2;
     int pX = (halfWidth - MeasureText("I-PLAYER", FONT_SIZE)) / 2;
@@ -1745,13 +1764,18 @@ static void titleLogic() {
 }
 
 static void drawTitle() {
-    int topY = 200;
+    int topY = 150;
     Texture2D *tex = &game.textures.title;
     int titleTexHeight = tex->height;
     int x = (SCREEN_WIDTH - tex->width * 2) / 2;
     int y = SCREEN_HEIGHT -
             (SCREEN_HEIGHT - topY) *
                 (MIN(game.title.time, TITLE_SLIDE_TIME) / TITLE_SLIDE_TIME);
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "HI-SCORE   %7d", game.hiScore);
+    DrawText(text, centerX(MeasureText(text, FONT_SIZE)), y - 70, FONT_SIZE,
+             WHITE);
     DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, titleTexHeight},
                    (Rectangle){x, y, tex->width * 2, titleTexHeight * 2},
                    (Vector2){}, 0, WHITE);
@@ -1820,6 +1844,16 @@ static void gameLogic() {
     updateGameState();
 }
 
+static void saveHiScore() {
+    char bytes[4];
+    bytes[0] = game.hiScore & 0xFF;
+    bytes[1] = (game.hiScore >> 8) & 0xFF;
+    bytes[2] = (game.hiScore >> 16) & 0xFF;
+    bytes[3] = (game.hiScore >> 24) & 0xFF;
+    Buffer b = {bytes, 4};
+    saveBuffer(b, "hiscore");
+}
+
 int main(void) {
 
     srand(time(0));
@@ -1846,6 +1880,8 @@ int main(void) {
         EndDrawing();
         game.frameTime = GetFrameTime();
     }
+
+    saveHiScore();
 
     CloseAudioDevice();
     CloseWindow();

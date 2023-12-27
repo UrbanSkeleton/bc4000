@@ -9,6 +9,16 @@ typedef struct {
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
+void saveBuffer(Buffer b, const char *filename) {
+    FILE *f = fopen(filename, "wb");
+    if (!f) {
+        fprintf(stderr, "Cannot open file: %s", filename);
+        exit(1);
+    }
+    fwrite(b.bytes, b.size, 1, f);
+    fclose(f);
+}
+
 Buffer readFile(const char *filename) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
