@@ -396,11 +396,27 @@ static void drawTank(Tank *tank) {
     int texY = game.tankSpecs[tank->type].texRow * TANK_TEXTURE_SIZE;
     int drawSize = TANK_TEXTURE_SIZE * 4;
     int drawOffset = (TANK_SIZE - drawSize) / 2;
+    Color texColor = WHITE;
+    if (tank->type == TArmor) {
+        switch (tank->lifes) {
+        case 4:
+            texColor = (Color){180, 255, 200, 255};
+            break;
+        case 3:
+            texColor = (Color){183, 240, 205, 255};
+            break;
+        case 2:
+            texColor = (Color){186, 225, 210, 255};
+            break;
+        default:
+            break;
+        }
+    }
     DrawTexturePro(
         *tex, (Rectangle){texX, texY, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
         (Rectangle){tank->pos.x + drawOffset, tank->pos.y + drawOffset,
                     drawSize, drawSize},
-        (Vector2){}, 0, WHITE);
+        (Vector2){}, 0, texColor);
     if (tank->shieldTimeLeft > 0) {
         Texture2D *tex = &game.textures.shield;
         int texY = (((long)(game.totalTime * 32)) % 2) * tex->width;
