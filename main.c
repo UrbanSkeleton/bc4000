@@ -159,6 +159,7 @@ typedef struct {
     bool isEnemy;
     short points;
     char texRow;
+    char lifes;
 } TankSpec;
 
 typedef enum {
@@ -885,12 +886,13 @@ static void initStage(char stage) {
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
                                    FIELD_COLS - 8 - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
+        TankType type = levelTanks[stage - 1][i];
         game.tanks[i + 2] = (Tank){
-            .type = levelTanks[stage - 1][i],
+            .type = type,
             .pos = (Vector2){CELL_SIZE * startingCols[i % 3], CELL_SIZE * 2},
             .direction = DDown,
             .status = TSPending,
-        };
+            .lifes = game.tankSpecs[type].lifes};
         if (i + 1 == 4)
             game.tanks[i + 2].powerUp = &game.powerUps[0];
         else if (i + 1 == 11)
@@ -953,6 +955,7 @@ static void initGame() {
                    .bulletSpeed = BULLET_SPEEDS[0],
                    .maxBulletCount = 1,
                    .points = 100,
+                   .lifes = 1,
                    .isEnemy = true};
     game.tankSpecs[TFast] =
         (TankSpec){.texture = &game.textures.enemies,
@@ -962,6 +965,7 @@ static void initGame() {
                    .maxBulletCount = 1,
                    .bulletSpeed = BULLET_SPEEDS[1],
                    .points = 200,
+                   .lifes = 1,
                    .isEnemy = true};
     game.tankSpecs[TPower] =
         (TankSpec){.texture = &game.textures.enemies,
@@ -971,6 +975,7 @@ static void initGame() {
                    .bulletSpeed = BULLET_SPEEDS[2],
                    .maxBulletCount = 1,
                    .points = 300,
+                   .lifes = 1,
                    .isEnemy = true};
     game.tankSpecs[TArmor] =
         (TankSpec){.texture = &game.textures.enemies,
@@ -980,6 +985,7 @@ static void initGame() {
                    .bulletSpeed = BULLET_SPEEDS[1],
                    .maxBulletCount = 1,
                    .points = 400,
+                   .lifes = 4,
                    .isEnemy = true};
     game.powerUpSpecs[PUTank] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 0};
@@ -1449,16 +1455,21 @@ static void checkBulletHit(Bullet *b) {
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             destroyBullet(b, true);
             if (t->shieldTimeLeft <= 0) {
-                destroyTank(t);
-                handlePlayerKill(t);
-                if (!isEnemy(b->tank)) {
-                    addScore(b->tank->type, game.tankSpecs[t->type].points);
-                    game.playerScores[b->tank->type].kills[t->type]++;
+                if (t->lifes == 1 || !isEnemy(t)) {
+                    destroyTank(t);
+                    handlePlayerKill(t);
+                    if (!isEnemy(b->tank)) {
+                        addScore(b->tank->type, game.tankSpecs[t->type].points);
+                        game.playerScores[b->tank->type].kills[t->type]++;
+                    }
+                    PlaySound(isEnemy(t)
+                                  ? (t->powerUp ? game.sounds.powerup_appear
+                                                : game.sounds.bullet_explosion)
+                                  : game.sounds.big_explosion);
+                } else {
+                    PlaySound(game.sounds.bullet_hit_1);
+                    t->lifes--;
                 }
-                PlaySound(isEnemy(t)
-                              ? (t->powerUp ? game.sounds.powerup_appear
-                                            : game.sounds.bullet_explosion)
-                              : game.sounds.big_explosion);
             }
             break;
         }
