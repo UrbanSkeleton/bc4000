@@ -47,6 +47,7 @@ const CellInfo fortressWall[] = {
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
 const float GAME_OVER_SLIDE_TIME = 1;
+const float STAGE_END_TIME = 3;
 const float GAME_OVER_CURTAIN_TIME = 5;
 const float GAME_OVER_DELAY = 3;
 const float STAGE_CURTAIN_TIME = 2;
@@ -343,6 +344,7 @@ typedef struct {
     GameMode mode;
     float stageCurtainTime;
     float gameOverTime;
+    float stageEndTime;
     float gameOverCurtainTime;
     bool isStageCurtainSoundPlayed;
     bool isPaused;
@@ -862,6 +864,7 @@ static void initStage(char stage) {
     game.stage = stage;
     game.isFlagDead = false;
     game.gameOverTime = 0;
+    game.stageEndTime = 0;
     game.gameOverCurtainTime = 0;
     game.stageCurtainTime = 0;
     game.isStageCurtainSoundPlayed = false;
@@ -1424,7 +1427,10 @@ static void handlePlayerKill(Tank *t) {
 }
 
 static void checkStageEnd() {
-    if (game.pendingEnemyCount + game.activeEnemyCount == 0 ||
+    if (game.pendingEnemyCount + game.activeEnemyCount == 0) {
+        game.stageEndTime += game.frameTime;
+    }
+    if (game.stageEndTime >= STAGE_END_TIME ||
         game.gameOverTime >= GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
         // if (true) {
 
