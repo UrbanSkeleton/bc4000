@@ -1326,7 +1326,42 @@ static void handleAI() {
     }
 }
 
+typedef struct {
+    KeyboardKey left;
+    KeyboardKey right;
+    KeyboardKey up;
+    KeyboardKey down;
+    KeyboardKey fire;
+} Controls;
+
+static Controls controls[2] = {
+    {KEY_A, KEY_D, KEY_W, KEY_S, KEY_SPACE},
+    {KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_COMMA},
+};
+
+static void handlePlayerInput(TankType type) {
+    Command cmd = {};
+    if (IsKeyDown(controls[type].right)) {
+        cmd.move = true;
+        cmd.direction = DRight;
+    } else if (IsKeyDown(controls[type].left)) {
+        cmd.move = true;
+        cmd.direction = DLeft;
+    } else if (IsKeyDown(controls[type].up)) {
+        cmd.move = true;
+        cmd.direction = DUp;
+    } else if (IsKeyDown(controls[type].down)) {
+        cmd.move = true;
+        cmd.direction = DDown;
+    }
+    if (IsKeyPressed(controls[type].fire)) {
+        cmd.fire = true;
+    }
+    handleCommand(&game.tanks[type], cmd);
+}
+
 static void handleInput() {
+
     if (game.gameOverTime > 0 && IsKeyPressed(KEY_ENTER)) {
         game.logic = stageSummaryLogic;
         game.draw = drawStageSummary;
@@ -1334,24 +1369,10 @@ static void handleInput() {
     }
     if (game.gameOverTime > 0)
         return;
-    Command cmd = {};
-    if (IsKeyDown(KEY_RIGHT)) {
-        cmd.move = true;
-        cmd.direction = DRight;
-    } else if (IsKeyDown(KEY_LEFT)) {
-        cmd.move = true;
-        cmd.direction = DLeft;
-    } else if (IsKeyDown(KEY_UP)) {
-        cmd.move = true;
-        cmd.direction = DUp;
-    } else if (IsKeyDown(KEY_DOWN)) {
-        cmd.move = true;
-        cmd.direction = DDown;
+    handlePlayerInput(TPlayer1);
+    if (game.mode == GMTwoPlayers) {
+        handlePlayerInput(TPlayer2);
     }
-    if (IsKeyPressed(KEY_Z)) {
-        cmd.fire = true;
-    }
-    handleCommand(&game.tanks[0], cmd);
 }
 
 static void destroyBullet(Bullet *b, bool explosion) {
