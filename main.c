@@ -46,6 +46,7 @@ const CellInfo fortressWall[] = {
 };
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
+const float IMMOBILE_TIME = 5;
 const float GAME_OVER_SLIDE_TIME = 1;
 const float STAGE_END_TIME = 3;
 const float GAME_OVER_CURTAIN_TIME = 5;
@@ -196,6 +197,7 @@ typedef struct {
     PowerUp *powerUp;
     char tier;
     float shieldTimeLeft;
+    float immobileTimeLeft;
 } Tank;
 
 typedef struct {
@@ -387,6 +389,8 @@ static void drawForest() {
 }
 
 static void drawTank(Tank *tank) {
+    if (tank->immobileTimeLeft > 0 && (long)(game.totalTime * 8) % 2)
+        return;
     static char textureRows[4] = {1, 3, 0, 2};
     Texture2D *tex = !tank->powerUp || ((long)(game.totalTime * 8)) % 2
                          ? game.tankSpecs[tank->type].texture
@@ -1246,6 +1250,8 @@ static void handleCommand(Tank *t, Command cmd) {
     if (cmd.fire) {
         fireBullet(t);
     }
+    if (t->immobileTimeLeft > 0)
+        return;
     t->isMoving = cmd.move;
     if (!cmd.move)
         return;
@@ -1486,7 +1492,9 @@ static void checkBulletHit(Bullet *b) {
                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             destroyBullet(b, true);
             if (t->shieldTimeLeft <= 0) {
-                if (t->lifes == 1 || !isEnemy(t)) {
+                if (!isEnemy(b->tank) && !isEnemy(t)) {
+                    t->immobileTimeLeft = IMMOBILE_TIME;
+                } else if (t->lifes == 1 || !isEnemy(t)) {
                     destroyTank(t);
                     handlePlayerKill(t);
                     if (!isEnemy(b->tank)) {
@@ -1624,6 +1632,7 @@ static void updateGameState() {
         } else if (tank->status == TSSpawning) {
             tank->spawningTime += game.frameTime;
             if (tank->spawningTime >= SPAWNING_TIME) {
+                tank->spawningTime = 0;
                 tank->status = TSActive;
                 if (tank->powerUp) {
                     for (int k = 0; k < MAX_POWERUP_COUNT; k++) {
@@ -1881,11 +1890,17 @@ static void gameLogic() {
             }
         }
     }
-    if (game.tanks[0].shieldTimeLeft > 0) {
-        game.tanks[0].shieldTimeLeft -= game.frameTime;
+    if (game.tanks[TPlayer1].shieldTimeLeft > 0) {
+        game.tanks[TPlayer1].shieldTimeLeft -= game.frameTime;
     }
-    if (game.tanks[1].shieldTimeLeft > 0) {
-        game.tanks[1].shieldTimeLeft -= game.frameTime;
+    if (game.tanks[TPlayer2].shieldTimeLeft > 0) {
+        game.tanks[TPlayer2].shieldTimeLeft -= game.frameTime;
+    }
+    if (game.tanks[TPlayer1].immobileTimeLeft > 0) {
+        game.tanks[TPlayer1].immobileTimeLeft -= game.frameTime;
+    }
+    if (game.tanks[TPlayer2].immobileTimeLeft > 0) {
+        game.tanks[TPlayer2].immobileTimeLeft -= game.frameTime;
     }
     handleInput();
     handleAI();
