@@ -671,8 +671,8 @@ static void loadTextures() {
     game.textures.blank = LoadTexture("textures/blank.png");
     game.cellSpecs[CTBlank] =
         (CellSpec){.texture = &game.textures.blank, .isPassable = true};
-    game.textures.player1Tank = LoadTexture("textures/player1.png");
-    game.textures.player2Tank = LoadTexture("textures/player2.png");
+    game.textures.player1Tank = LoadTexture("textures/player1alt.png");
+    game.textures.player2Tank = LoadTexture("textures/player2alt.png");
     game.textures.bullet = LoadTexture("textures/bullet.png");
     game.textures.bulletExplosions[0] =
         LoadTexture("textures/bullet_explosion_1.png");
@@ -786,7 +786,7 @@ static void initUIElements() {
                         .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                         .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
     }
-    if (game.tanks[1].status == TSActive) {
+    if (game.mode == GMTwoPlayers) {
         game.uiElements[UIPlayer2] =
             (UIElement){.isVisible = true,
                         .texture = &game.textures.ui,
@@ -828,10 +828,14 @@ static void spawnPlayer(Tank *t, bool resetTier) {
     t->direction = DUp;
     t->status = TSSpawning;
     t->shieldTimeLeft = 4;
+    t->immobileTimeLeft = 0;
+    t->firedBulletCount = 0;
+    t->isMoving = false;
     if (resetTier) {
         t->tier = 0;
         game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[0];
         game.tankSpecs[t->type].maxBulletCount = 1;
+        game.tankSpecs[t->type].texRow = 0;
     }
 }
 
@@ -881,6 +885,8 @@ static void initStage(char stage) {
     game.gameOverTime = 0;
     game.stageEndTime = 0;
     game.gameOverCurtainTime = 0;
+    game.timerPowerUpTimeLeft = 0;
+    game.shovelPowerUpTimeLeft = 0;
     game.stageCurtainTime = 0;
     game.isStageCurtainSoundPlayed = false;
     for (int i = 0; i < FIELD_ROWS; i++) {
@@ -891,11 +897,9 @@ static void initStage(char stage) {
         }
     }
     loadStage(game.stage);
-    game.tanks[0] = (Tank){.type = TPlayer1, .lifes = 2};
-    spawnPlayer(&game.tanks[0], false);
-    game.tanks[1] = (Tank){.type = TPlayer2, .lifes = 2, .status = TSPending};
+    spawnPlayer(&game.tanks[TPlayer1], false);
     if (game.mode == GMTwoPlayers) {
-        spawnPlayer(&game.tanks[1], false);
+        spawnPlayer(&game.tanks[TPlayer2], false);
     }
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
                                    FIELD_COLS - 8 - 4};
@@ -937,6 +941,21 @@ static void loadHiScore() {
                    ((int)b.bytes[2] << 16) | ((int)b.bytes[3] << 24);
 }
 
+static void initGameRun() {
+    game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
+    game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
+    game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
+                                          .texRow = 0,
+                                          .bulletSpeed = BULLET_SPEEDS[0],
+                                          .maxBulletCount = 1,
+                                          .speed = PLAYER_SPEED};
+    game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
+                                          .texRow = 0,
+                                          .bulletSpeed = BULLET_SPEEDS[0],
+                                          .maxBulletCount = 1,
+                                          .speed = PLAYER_SPEED};
+}
+
 static void initGame() {
     loadHiScore();
     loadTextures();
@@ -951,16 +970,6 @@ static void initGame() {
                     .textures = &game.textures.bigExplosions[0]};
     game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
                              CELL_SIZE * (FIELD_ROWS - 4 - 2)};
-    game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
-                                          .texRow = 0,
-                                          .bulletSpeed = BULLET_SPEEDS[0],
-                                          .maxBulletCount = 1,
-                                          .speed = PLAYER_SPEED};
-    game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
-                                          .texRow = 0,
-                                          .bulletSpeed = BULLET_SPEEDS[0],
-                                          .maxBulletCount = 1,
-                                          .speed = PLAYER_SPEED};
     game.tankSpecs[TBasic] =
         (TankSpec){.texture = &game.textures.enemies,
                    .powerUpTexture = &game.textures.enemiesWithPowerUps,
@@ -1205,6 +1214,7 @@ static void handlePowerUpHit(Tank *t) {
                 if (t->tier == 3)
                     return;
                 t->tier++;
+                game.tankSpecs[t->type].texRow++;
                 switch (t->tier) {
                 case 1:
                     game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[2];
@@ -1383,7 +1393,9 @@ static void handleInput() {
 
 static void destroyBullet(Bullet *b, bool explosion) {
     b->type = BTNone;
-    b->tank->firedBulletCount--;
+    if (b->tank->firedBulletCount > 0) {
+        b->tank->firedBulletCount--;
+    }
     if (explosion) {
         createExplosion(ETBullet, b->pos, BULLET_SIZE);
     }
@@ -1646,10 +1658,10 @@ static void updateGameState() {
     checkStageEnd();
 }
 
-// static void drawFloat(float x) {
+// static void drawFloat(float d, int x, int y) {
 //     char buffer[20];
-//     snprintf(buffer, 20, "%f", x);
-//     DrawText(buffer, 10, 10, 10, WHITE);
+//     snprintf(buffer, 20, "%f", d);
+//     DrawText(buffer, x, y, 10, WHITE);
 // }
 
 static void gameOverCurtainLogic() {
@@ -1816,6 +1828,7 @@ static void titleLogic() {
         game.title = (Title){0};
         game.logic = gameLogic;
         game.draw = drawGame;
+        initGameRun();
         initStage(1);
     }
 }
@@ -1939,7 +1952,8 @@ int main(void) {
         BeginDrawing();
         ClearBackground(BLACK);
         game.draw();
-        // drawFloat(game.tanks[0].shieldTimeLeft);
+        // drawFloat(game.tanks[0].tier, 10, 10);
+        // drawFloat(game.tanks[0].firedBulletCount, 10, 30);
         EndDrawing();
         game.frameTime = GetFrameTime();
     }
