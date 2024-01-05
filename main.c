@@ -6,13 +6,18 @@
 
 #include "utils.c"
 
+// #define DRAW_CELL_GRID
+// #define TEXDIR "original"
+#define TEXDIR "alt"
+
 static void gameLogic();
+static void drawGame();
 static void stageSummaryLogic();
 static void drawStageSummary();
 static void titleLogic();
 static void drawTitle();
-
-// #define DRAW_CELL_GRID
+static void gameOverCurtainLogic();
+static void drawGameOverCurtain();
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
@@ -46,6 +51,7 @@ const CellInfo fortressWall[] = {
 };
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
+const float SOUNDTRACK_TIME = 4.8;
 const float IMMOBILE_TIME = 5;
 const float GAME_OVER_SLIDE_TIME = 1;
 const float STAGE_END_TIME = 3;
@@ -298,6 +304,7 @@ typedef struct {
     Sound powerup_appear;
     Sound powerup_pick;
     Sound start_menu;
+    Sound soundtrack[20];
 } Sounds;
 
 typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
@@ -313,7 +320,19 @@ typedef struct {
 
 typedef enum { GMOnePlayer, GMTwoPlayers } GameMode;
 
-// typedef enum {GSTitle, GSStageCurtain, GSPlaying, }
+typedef enum { GSTitle, GSPlay, GSScore, GSGameOver } GameScreen;
+
+typedef struct {
+    void (*logic)(void);
+    void (*draw)(void);
+} GameFunctions;
+
+static GameFunctions gameFunctions[] = {
+    {.logic = titleLogic, .draw = drawTitle},
+    {.logic = gameLogic, .draw = drawGame},
+    {.logic = stageSummaryLogic, .draw = drawStageSummary},
+    {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
+};
 
 typedef struct {
     Cell field[FIELD_ROWS][FIELD_COLS];
@@ -352,6 +371,10 @@ typedef struct {
     bool isStageCurtainSoundPlayed;
     bool isPaused;
     int hiScore;
+    GameScreen screen;
+    float soundtrackTime;
+    char soundtrackPhase;
+    char soundtrack;
 } Game;
 
 static Game game;
@@ -630,66 +653,76 @@ static void loadSounds() {
     game.sounds.powerup_appear = LoadSound("sounds/powerup_appear.ogg");
     game.sounds.powerup_pick = LoadSound("sounds/powerup_pick.ogg");
     game.sounds.start_menu = LoadSound("sounds/start_menu.ogg");
+    for (int track = 0; track <= 4; track++) {
+        for (int phase = 0; phase <= 3; phase++) {
+            char filename[50];
+            snprintf(filename, 50, "sounds/soundtrack/soundtrack%d_%d.wav",
+                     track, phase);
+            game.sounds.soundtrack[track * 4 + phase] = LoadSound(filename);
+        }
+    }
 }
 
 static void loadTextures() {
-    game.textures.flag = LoadTexture("textures/flag.png");
-    game.textures.pause = LoadTexture("textures/pause.png");
-    game.textures.deadFlag = LoadTexture("textures/deadFlag.png");
-    game.textures.gameOver = LoadTexture("textures/gameOver.png");
-    game.textures.gameOverCurtain = LoadTexture("textures/gameOverCurtain.png");
-    game.textures.leftArrow = LoadTexture("textures/leftArrow.png");
-    game.textures.rightArrow = LoadTexture("textures/rightArrow.png");
-    game.textures.title = LoadTexture("textures/title.png");
-    game.textures.shield = LoadTexture("textures/shield.png");
-    game.textures.powerups = LoadTexture("textures/powerup.png");
-    game.textures.ui = LoadTexture("textures/ui.png");
-    game.textures.digits = LoadTexture("textures/digits.png");
-    game.textures.uiFlag = LoadTexture("textures/uiFlag.png");
-    game.textures.spawningTank = LoadTexture("textures/born.png");
-    game.textures.enemies = LoadTexture("textures/enemies.png");
+    game.textures.flag = LoadTexture("textures/" TEXDIR "/flag.png");
+    game.textures.pause = LoadTexture("textures/" TEXDIR "/pause.png");
+    game.textures.deadFlag = LoadTexture("textures/" TEXDIR "/deadFlag.png");
+    game.textures.gameOver = LoadTexture("textures/" TEXDIR "/gameOver.png");
+    game.textures.gameOverCurtain =
+        LoadTexture("textures/" TEXDIR "/gameOverCurtain.png");
+    game.textures.leftArrow = LoadTexture("textures/" TEXDIR "/leftArrow.png");
+    game.textures.rightArrow =
+        LoadTexture("textures/" TEXDIR "/rightArrow.png");
+    game.textures.title = LoadTexture("textures/" TEXDIR "/title.png");
+    game.textures.shield = LoadTexture("textures/" TEXDIR "/shield.png");
+    game.textures.powerups = LoadTexture("textures/" TEXDIR "/powerup.png");
+    game.textures.ui = LoadTexture("textures/" TEXDIR "/ui.png");
+    game.textures.digits = LoadTexture("textures/" TEXDIR "/digits.png");
+    game.textures.uiFlag = LoadTexture("textures/" TEXDIR "/uiFlag.png");
+    game.textures.spawningTank = LoadTexture("textures/" TEXDIR "/born.png");
+    game.textures.enemies = LoadTexture("textures/" TEXDIR "/enemies.png");
     game.textures.enemiesWithPowerUps =
-        LoadTexture("textures/enemies_with_powerups.png");
-    game.textures.border = LoadTexture("textures/border.png");
+        LoadTexture("textures/" TEXDIR "/enemies_with_powerups.png");
+    game.textures.border = LoadTexture("textures/" TEXDIR "/border.png");
     game.cellSpecs[CTBorder] =
         (CellSpec){.texture = &game.textures.border, .isSolid = true};
-    game.textures.brick = LoadTexture("textures/brick.png");
+    game.textures.brick = LoadTexture("textures/" TEXDIR "/brick.png");
     game.cellSpecs[CTBrick] =
         (CellSpec){.texture = &game.textures.brick, .isSolid = true};
-    game.textures.ice = LoadTexture("textures/ice.png");
+    game.textures.ice = LoadTexture("textures/" TEXDIR "/ice.png");
     game.cellSpecs[CTIce] =
         (CellSpec){.texture = &game.textures.ice, .isPassable = true};
-    game.textures.concrete = LoadTexture("textures/concrete.png");
+    game.textures.concrete = LoadTexture("textures/" TEXDIR "/concrete.png");
     game.cellSpecs[CTConcrete] =
         (CellSpec){.texture = &game.textures.concrete, .isSolid = true};
-    game.textures.forest = LoadTexture("textures/forest.png");
+    game.textures.forest = LoadTexture("textures/" TEXDIR "/forest.png");
     game.cellSpecs[CTForest] =
         (CellSpec){.texture = &game.textures.forest, .isPassable = true};
-    game.textures.river[0] = LoadTexture("textures/river1.png");
-    game.textures.river[1] = LoadTexture("textures/river2.png");
+    game.textures.river[0] = LoadTexture("textures/" TEXDIR "/river1.png");
+    game.textures.river[1] = LoadTexture("textures/" TEXDIR "/river2.png");
     game.cellSpecs[CTRiver] = (CellSpec){.texture = &game.textures.river[0]};
-    game.textures.blank = LoadTexture("textures/blank.png");
+    game.textures.blank = LoadTexture("textures/" TEXDIR "/blank.png");
     game.cellSpecs[CTBlank] =
         (CellSpec){.texture = &game.textures.blank, .isPassable = true};
-    game.textures.player1Tank = LoadTexture("textures/player1alt.png");
-    game.textures.player2Tank = LoadTexture("textures/player2alt.png");
-    game.textures.bullet = LoadTexture("textures/bullet.png");
+    game.textures.player1Tank = LoadTexture("textures/" TEXDIR "/player1.png");
+    game.textures.player2Tank = LoadTexture("textures/" TEXDIR "/player2.png");
+    game.textures.bullet = LoadTexture("textures/" TEXDIR "/bullet.png");
     game.textures.bulletExplosions[0] =
-        LoadTexture("textures/bullet_explosion_1.png");
+        LoadTexture("textures/" TEXDIR "/bullet_explosion_1.png");
     game.textures.bulletExplosions[1] =
-        LoadTexture("textures/bullet_explosion_2.png");
+        LoadTexture("textures/" TEXDIR "/bullet_explosion_2.png");
     game.textures.bulletExplosions[2] =
-        LoadTexture("textures/bullet_explosion_3.png");
+        LoadTexture("textures/" TEXDIR "/bullet_explosion_3.png");
     game.textures.bigExplosions[0] =
-        LoadTexture("textures/big_explosion_1.png");
+        LoadTexture("textures/" TEXDIR "/big_explosion_1.png");
     game.textures.bigExplosions[1] =
-        LoadTexture("textures/big_explosion_2.png");
+        LoadTexture("textures/" TEXDIR "/big_explosion_2.png");
     game.textures.bigExplosions[2] =
-        LoadTexture("textures/big_explosion_3.png");
+        LoadTexture("textures/" TEXDIR "/big_explosion_3.png");
     game.textures.bigExplosions[3] =
-        LoadTexture("textures/big_explosion_4.png");
+        LoadTexture("textures/" TEXDIR "/big_explosion_4.png");
     game.textures.bigExplosions[4] =
-        LoadTexture("textures/big_explosion_5.png");
+        LoadTexture("textures/" TEXDIR "/big_explosion_5.png");
 }
 
 static void loadStage(int stage) {
@@ -1376,11 +1409,16 @@ static void handlePlayerInput(TankType type) {
     handleCommand(&game.tanks[type], cmd);
 }
 
+static void setScreen(GameScreen s) {
+    game.screen = s;
+    game.logic = gameFunctions[s].logic;
+    game.draw = gameFunctions[s].draw;
+}
+
 static void handleInput() {
 
     if (game.gameOverTime > 0 && IsKeyPressed(KEY_ENTER)) {
-        game.logic = stageSummaryLogic;
-        game.draw = drawStageSummary;
+        setScreen(GSScore);
         return;
     }
     if (game.gameOverTime > 0)
@@ -1487,10 +1525,7 @@ static void checkStageEnd() {
     }
     if (game.stageEndTime >= STAGE_END_TIME ||
         game.gameOverTime >= GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
-        // if (true) {
-
-        game.logic = stageSummaryLogic;
-        game.draw = drawStageSummary;
+        setScreen(GSScore);
     }
 }
 
@@ -1671,8 +1706,7 @@ static void gameOverCurtainLogic() {
     if (game.gameOverCurtainTime >= GAME_OVER_CURTAIN_TIME ||
         IsKeyPressed(KEY_ENTER)) {
         game.gameOverCurtainTime = 0;
-        game.logic = titleLogic;
-        game.draw = drawTitle;
+        setScreen(GSTitle);
     }
 }
 
@@ -1692,12 +1726,10 @@ static void stageSummaryLogic() {
     if (IsKeyPressed(KEY_ENTER)) {
         if (game.gameOverTime) {
             PlaySound(game.sounds.game_over);
-            game.logic = gameOverCurtainLogic;
-            game.draw = drawGameOverCurtain;
+            setScreen(GSGameOver);
         } else {
             initStage(game.stage + 1);
-            game.logic = gameLogic;
-            game.draw = drawGame;
+            setScreen(GSPlay);
         }
     }
 }
@@ -1826,8 +1858,7 @@ static void titleLogic() {
             ;
         }
         game.title = (Title){0};
-        game.logic = gameLogic;
-        game.draw = drawGame;
+        setScreen(GSPlay);
         initGameRun();
         initStage(1);
     }
@@ -1930,6 +1961,31 @@ static void saveHiScore() {
     saveBuffer(b, "hiscore");
 }
 
+static void playMusic() {
+    static bool isFirstTime = true;
+    if (isFirstTime) {
+        isFirstTime = false;
+        game.soundtrackTime = GetTime() - game.soundtrackTime;
+    } else {
+        game.soundtrackTime += game.frameTime;
+    }
+    // drawFloat(game.soundtrackTime, 10, 10);
+    // printf("%g\n", game.soundtrackTime);
+    if (game.soundtrackTime < SOUNDTRACK_TIME)
+        return;
+    game.soundtrackTime -= SOUNDTRACK_TIME;
+    char track = game.screen == GSPlay ? (game.stage - 1) % 4 + 1 : 0;
+    if (game.soundtrack != track) {
+        game.soundtrackPhase = 0;
+    } else {
+        game.soundtrackPhase++;
+        game.soundtrackPhase %= 4;
+    }
+    game.soundtrack = track;
+    PlaySound(
+        game.sounds.soundtrack[game.soundtrack * 4 + game.soundtrackPhase]);
+}
+
 int main(void) {
 
     srand(time(0));
@@ -1940,10 +1996,12 @@ int main(void) {
 
     initGame();
 
-    game.logic = titleLogic;
-    game.draw = drawTitle;
+    setScreen(GSTitle);
 
     SetTargetFPS(60);
+
+    game.soundtrackTime = GetTime();
+    PlaySound(game.sounds.soundtrack[0]);
 
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
@@ -1952,10 +2010,11 @@ int main(void) {
         BeginDrawing();
         ClearBackground(BLACK);
         game.draw();
-        // drawFloat(game.tanks[0].tier, 10, 10);
-        // drawFloat(game.tanks[0].firedBulletCount, 10, 30);
+        // drawFloat(game.soundtrack, 10, 10);
+        // drawFloat(game.soundtrackPhase, 10, 30);
         EndDrawing();
         game.frameTime = GetFrameTime();
+        playMusic();
     }
 
     saveHiScore();
