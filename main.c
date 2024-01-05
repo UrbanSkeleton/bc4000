@@ -372,7 +372,7 @@ typedef struct {
     bool isPaused;
     int hiScore;
     GameScreen screen;
-    float soundtrackTime;
+    float soundtrackStartTime;
     char soundtrackPhase;
     char soundtrack;
 } Game;
@@ -1965,15 +1965,14 @@ static void playMusic() {
     static bool isFirstTime = true;
     if (isFirstTime) {
         isFirstTime = false;
-        game.soundtrackTime = GetTime() - game.soundtrackTime;
-    } else {
-        game.soundtrackTime += game.frameTime;
-    }
-    // drawFloat(game.soundtrackTime, 10, 10);
-    // printf("%g\n", game.soundtrackTime);
-    if (game.soundtrackTime < SOUNDTRACK_TIME)
+        game.soundtrackStartTime = GetTime();
+        PlaySound(game.sounds.soundtrack[0]);
         return;
-    game.soundtrackTime -= SOUNDTRACK_TIME;
+    }
+    double t = GetTime();
+    if (t - game.soundtrackStartTime < SOUNDTRACK_TIME)
+        return;
+    game.soundtrackStartTime = t;
     char track = game.screen == GSPlay ? (game.stage - 1) % 4 + 1 : 0;
     if (game.soundtrack != track) {
         game.soundtrackPhase = 0;
@@ -1999,9 +1998,6 @@ int main(void) {
     setScreen(GSTitle);
 
     SetTargetFPS(60);
-
-    game.soundtrackTime = GetTime();
-    PlaySound(game.sounds.soundtrack[0]);
 
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
