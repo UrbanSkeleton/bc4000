@@ -379,9 +379,19 @@ typedef struct {
     char soundtrackPhase;
     char soundtrack;
     bool isDieSoundtrackPlayed;
+    Font font;
 } Game;
 
 static Game game;
+
+static void drawText(const char *text, int x, int y, int fontSize,
+                     Color color) {
+    DrawTextEx(game.font, text, (Vector2){x, y}, fontSize, 2, color);
+}
+
+static int measureText(const char *text, int fontSize) {
+    return MeasureTextEx(game.font, text, fontSize, 2).x;
+}
 
 static bool isEnemy(Tank *t) { return game.tankSpecs[t->type].isEnemy; }
 
@@ -614,8 +624,8 @@ static void drawStageCurtain() {
     if (game.stageCurtainTime < delayTime) {
         char text[20];
         snprintf(text, 20, "STAGE %2d", game.stage);
-        int textSize = MeasureText(text, FONT_SIZE);
-        DrawText(text, centerX(textSize), (SCREEN_HEIGHT - FONT_SIZE) / 2,
+        int textSize = measureText(text, FONT_SIZE);
+        drawText(text, centerX(textSize), (SCREEN_HEIGHT - FONT_SIZE) / 2,
                  FONT_SIZE, BLACK);
     }
 }
@@ -1007,6 +1017,7 @@ static void initGame() {
     loadHiScore();
     loadTextures();
     loadSounds();
+    game.font = LoadFontEx("fonts/LiberationMono.ttf", 40, NULL, 0);
     game.explosionAnimations[ETBullet] =
         (Animation){.duration = BULLET_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bulletExplosions),
@@ -1712,7 +1723,7 @@ static void updateGameState() {
 // static void drawFloat(float d, int x, int y) {
 //     char buffer[20];
 //     snprintf(buffer, 20, "%f", d);
-//     DrawText(buffer, x, y, 10, WHITE);
+//     drawText(buffer, x, y, 10, WHITE);
 // }
 
 static void gameOverCurtainLogic() {
@@ -1756,37 +1767,37 @@ static void drawStageSummary() {
     char text[N];
 
     snprintf(text, N, "HI-SCORE  %7d", game.hiScore);
-    int x = centerX(MeasureText(text, FONT_SIZE));
-    DrawText("HI-SCORE", x, topY, FONT_SIZE, (Color){205, 62, 26, 255});
+    int x = centerX(measureText(text, FONT_SIZE));
+    drawText("HI-SCORE", x, topY, FONT_SIZE, (Color){205, 62, 26, 255});
     snprintf(text, N, "%7d", game.hiScore);
-    DrawText(text, x + MeasureText("HI-SCORE  ", FONT_SIZE), topY, FONT_SIZE,
+    drawText(text, x + measureText("HI-SCORE  ", FONT_SIZE), topY, FONT_SIZE,
              (Color){241, 159, 80, 255});
     topY += 70;
 
     snprintf(text, N, "STAGE %2d", game.stage);
-    DrawText(text, centerX(MeasureText(text, FONT_SIZE)), topY, FONT_SIZE,
+    drawText(text, centerX(measureText(text, FONT_SIZE)), topY, FONT_SIZE,
              WHITE);
 
     int linePadding = 40;
     int halfWidth = SCREEN_WIDTH / 2;
-    int pX = (halfWidth - MeasureText("I-PLAYER", FONT_SIZE)) / 2;
-    DrawText("I-PLAYER", pX, topY + FONT_SIZE + linePadding, FONT_SIZE,
+    int pX = (halfWidth - measureText("I-PLAYER", FONT_SIZE)) / 2;
+    drawText("I-PLAYER", pX, topY + FONT_SIZE + linePadding, FONT_SIZE,
              (Color){205, 62, 26, 255});
 
     // Player score
     snprintf(text, N, "%d", game.playerScores[TPlayer1].totalScore);
-    DrawText(text, (halfWidth - MeasureText(text, FONT_SIZE) - pX),
+    drawText(text, (halfWidth - measureText(text, FONT_SIZE) - pX),
              topY + (FONT_SIZE + linePadding) * 2, FONT_SIZE,
              (Color){241, 159, 80, 255});
 
     if (game.mode == GMTwoPlayers) {
-        int pX = (halfWidth - MeasureText("II-PLAYER", FONT_SIZE)) / 2;
-        DrawText("II-PLAYER", halfWidth + pX, topY + FONT_SIZE + linePadding,
+        int pX = (halfWidth - measureText("II-PLAYER", FONT_SIZE)) / 2;
+        drawText("II-PLAYER", halfWidth + pX, topY + FONT_SIZE + linePadding,
                  FONT_SIZE, (Color){205, 62, 26, 255});
 
         // Player score
         snprintf(text, N, "%d", game.playerScores[TPlayer2].totalScore);
-        DrawText(text, (halfWidth + pX), topY + (FONT_SIZE + linePadding) * 2,
+        drawText(text, (halfWidth + pX), topY + (FONT_SIZE + linePadding) * 2,
                  FONT_SIZE, (Color){241, 159, 80, 255});
     }
     int arrowWidth = game.textures.leftArrow.width;
@@ -1819,7 +1830,7 @@ static void drawStageSummary() {
         player1TotalKills += kills;
         snprintf(text, N, "%4d PTS  %2d", kills * game.tankSpecs[i].points,
                  kills);
-        DrawText(text, halfWidth - MeasureText(text, FONT_SIZE) - 100, y,
+        drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100, y,
                  FONT_SIZE, WHITE);
         if (game.mode == GMTwoPlayers) {
             DrawTexturePro(game.textures.rightArrow,
@@ -1831,18 +1842,19 @@ static void drawStageSummary() {
 
             kills = game.playerScores[TPlayer2].kills[i];
             player2TotalKills += kills;
-            snprintf(text, N, "%2d  %4d PTS", kills * game.tankSpecs[i].points,
-                     kills);
-            DrawText(text, halfWidth + 100, y, FONT_SIZE, WHITE);
+            snprintf(text, N, "%2d  %4d PTS", kills,
+                     kills * game.tankSpecs[i].points);
+            drawText(text, halfWidth + 100, y, FONT_SIZE, WHITE);
         }
     }
     snprintf(text, N, "TOTAL %2d", player1TotalKills);
-    DrawText(text, halfWidth - MeasureText(text, FONT_SIZE) - 100,
+    drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100,
              topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE, WHITE);
     if (game.mode == GMTwoPlayers) {
         snprintf(text, N, "%2d", player2TotalKills);
-        DrawText(text, halfWidth + 100, topY + (FONT_SIZE + linePadding) * TMax,
-                 FONT_SIZE, WHITE);
+        drawText(text, halfWidth + 100,
+                 topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE,
+                 WHITE);
     }
 }
 
@@ -1888,7 +1900,7 @@ static void drawTitle() {
     static const int N = 256;
     char text[N];
     snprintf(text, N, "HI-SCORE   %7d", game.hiScore);
-    DrawText(text, centerX(MeasureText(text, FONT_SIZE)), y - 70, FONT_SIZE,
+    drawText(text, centerX(measureText(text, FONT_SIZE)), y - 70, FONT_SIZE,
              WHITE);
     DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, titleTexHeight},
                    (Rectangle){x, y, tex->width * 2, titleTexHeight * 2},
@@ -2038,6 +2050,8 @@ int main(void) {
         playMusic();
 #endif
     }
+
+    UnloadFont(game.font);
 
     saveHiScore();
 
