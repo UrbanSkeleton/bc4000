@@ -973,7 +973,7 @@ static void initStage(char stage) {
     memset(game.bullets, 0, sizeof(game.bullets));
     memset(game.explosions, 0, sizeof(game.explosions));
     game.pendingEnemyCount = MAX_ENEMY_COUNT;
-    game.maxActiveEnemyCount = 4;
+    game.maxActiveEnemyCount = 10;
     game.timeSinceSpawn = ENEMY_SPAWN_INTERVAL;
     game.activeEnemyCount = 0;
     initUIElements();
@@ -1314,6 +1314,7 @@ static void handleCommand(Tank *t, Command cmd) {
         return;
     t->texColOffset = (t->texColOffset + 1) % 2;
     Vector2 prevPos = t->pos;
+    bool isAlreadyCollided = checkTankToTankCollision(t);
     if (t->direction == cmd.direction) {
         int delta = game.frameTime * game.tankSpecs[t->type].speed;
         switch (t->direction) {
@@ -1349,7 +1350,8 @@ static void handleCommand(Tank *t, Command cmd) {
         }
     }
     handlePowerUpHit(t);
-    if (checkTankToTankCollision(t) || checkTankToFlagCollision(t)) {
+    if ((!isAlreadyCollided && checkTankToTankCollision(t)) ||
+        checkTankToFlagCollision(t)) {
         t->pos = prevPos;
         t->isMoving = false;
     } else {
