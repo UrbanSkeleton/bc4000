@@ -1,6 +1,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+typedef uint32_t u32;
+
 typedef struct {
     char *bytes;
     long size;

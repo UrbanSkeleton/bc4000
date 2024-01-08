@@ -993,8 +993,8 @@ static void loadHiScore() {
     Buffer b = readFile("hiscore");
     if (b.size < 4)
         return;
-    game.hiScore = (int)b.bytes[0] | ((int)b.bytes[1] << 8) |
-                   ((int)b.bytes[2] << 16) | ((int)b.bytes[3] << 24);
+    game.hiScore = (u32)b.bytes[0] | ((u32)b.bytes[1] << 8) |
+                   ((u32)b.bytes[2] << 16) | ((u32)b.bytes[3] << 24);
 }
 
 static void initGameRun() {
