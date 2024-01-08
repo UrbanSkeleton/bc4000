@@ -2038,23 +2038,35 @@ int main(void) {
 
     SetTraceLogLevel(LOG_NONE);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
+    SetTargetFPS(60);
+
+    RenderTexture2D renderTexture =
+        LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    int display = GetCurrentMonitor();
+    SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
+    ToggleFullscreen();
+
     InitAudioDevice();
 
     initGame();
-
     setScreen(GSTitle);
-
-    SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
 
         game.logic();
-        BeginDrawing();
+        BeginTextureMode(renderTexture);
         ClearBackground(BLACK);
         game.draw();
-        // drawFloat(game.soundtrack, 10, 10);
-        // drawFloat(game.soundtrackPhase, 10, 30);
+        EndTextureMode();
+        BeginDrawing();
+        int sh = GetScreenHeight();
+        int sw = sh * ((float)SCREEN_WIDTH / SCREEN_HEIGHT);
+        DrawTexturePro(renderTexture.texture,
+                       (Rectangle){0, 0, SCREEN_WIDTH, -SCREEN_HEIGHT},
+                       (Rectangle){(GetScreenWidth() - sw) / 2, 0, sw, sh},
+                       (Vector2){0, 0}, 0, WHITE);
         EndDrawing();
         game.frameTime = GetFrameTime();
 #ifdef ALT_ASSETS
