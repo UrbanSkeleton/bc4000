@@ -379,7 +379,6 @@ typedef struct {
     char soundtrackPhase;
     char soundtrack;
     bool isDieSoundtrackPlayed;
-    bool isGameOverSoundtrackPlayed;
     Font font;
 } Game;
 
@@ -1012,7 +1011,6 @@ static void initGameRun() {
                                           .maxBulletCount = 1,
                                           .speed = PLAYER_SPEED};
     game.isDieSoundtrackPlayed = false;
-    game.isGameOverSoundtrackPlayed = false;
 }
 
 static void initGame() {
@@ -2011,15 +2009,6 @@ static void playMusic() {
     }
     if (IsSoundPlaying(currentSoundtrack) || IsSoundPlaying(dieSoundtrack))
         return;
-    if (game.screen == GSGameOver) {
-        if (game.isGameOverSoundtrackPlayed)
-            return;
-        game.soundtrack = 5; // Die soundtrack
-        game.soundtrackPhase = 0;
-        game.isGameOverSoundtrackPlayed = true;
-        PlaySound(currentSoundtrack);
-        return;
-    }
     char track = game.screen == GSPlay ? (game.stage - 1) % 4 + 1 : 0;
     if (game.soundtrack != track) {
         game.soundtrackPhase = 0;
