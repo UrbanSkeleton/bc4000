@@ -379,6 +379,7 @@ typedef struct {
     char soundtrackPhase;
     char soundtrack;
     bool isDieSoundtrackPlayed;
+    bool isGameOverSoundtrackPlayed;
     Font font;
 } Game;
 
@@ -1011,6 +1012,7 @@ static void initGameRun() {
                                           .maxBulletCount = 1,
                                           .speed = PLAYER_SPEED};
     game.isDieSoundtrackPlayed = false;
+    game.isGameOverSoundtrackPlayed = false;
 }
 
 static void initGame() {
@@ -1989,23 +1991,33 @@ static void saveHiScore() {
 #ifdef ALT_ASSETS
 static void playMusic() {
     static bool isFirstTime = true;
+#define currentSoundtrack                                                      \
+    (game.sounds.soundtrack[game.soundtrack * 4 + game.soundtrackPhase])
+#define dieSoundtrack                                                          \
+    (game.sounds.soundtrack[ASIZE(game.sounds.soundtrack) - 1])
     if (isFirstTime) {
         isFirstTime = false;
-        // game.soundtrackStartTime = GetTime();
         PlaySound(game.sounds.soundtrack[0]);
         return;
     }
-    if (IsSoundPlaying(
-            game.sounds.soundtrack[game.soundtrack * 4 + game.soundtrackPhase]))
+    if (game.gameOverTime) {
+        if (IsSoundPlaying(dieSoundtrack))
+            return;
+        if (!game.isDieSoundtrackPlayed) {
+            StopSound(currentSoundtrack);
+            PlaySound(dieSoundtrack);
+            game.isDieSoundtrackPlayed = true;
+        }
+    }
+    if (IsSoundPlaying(currentSoundtrack) || IsSoundPlaying(dieSoundtrack))
         return;
     if (game.screen == GSGameOver) {
-        if (game.isDieSoundtrackPlayed)
+        if (game.isGameOverSoundtrackPlayed)
             return;
         game.soundtrack = 5; // Die soundtrack
         game.soundtrackPhase = 0;
-        game.isDieSoundtrackPlayed = true;
-        PlaySound(
-            game.sounds.soundtrack[game.soundtrack * 4 + game.soundtrackPhase]);
+        game.isGameOverSoundtrackPlayed = true;
+        PlaySound(currentSoundtrack);
         return;
     }
     char track = game.screen == GSPlay ? (game.stage - 1) % 4 + 1 : 0;
@@ -2016,8 +2028,7 @@ static void playMusic() {
         game.soundtrackPhase %= 4;
     }
     game.soundtrack = track;
-    PlaySound(
-        game.sounds.soundtrack[game.soundtrack * 4 + game.soundtrackPhase]);
+    PlaySound(currentSoundtrack);
 }
 #endif
 
