@@ -78,7 +78,6 @@ const int SCREEN_HEIGHT = FIELD_ROWS * CELL_SIZE;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
 const int TANK_TEXTURE_SIZE = 16;
-const int TANK_HITBOX_SIZE = (TANK_TEXTURE_SIZE - 1) * 4;
 const int FLAG_SIZE = TANK_SIZE;
 const Vector2 POWER_UP_TEXTURE_SIZE = {30, 28};
 const int POWER_UP_SIZE = CELL_SIZE * 4;
@@ -155,7 +154,7 @@ typedef enum {
 
 typedef struct {
     int totalScore;
-    char kills[TMax];
+    int kills[TMax];
 } PlayerScore;
 
 typedef struct {
@@ -1044,6 +1043,7 @@ static void initGameRun() {
                                           .maxBulletCount = 1,
                                           .speed = PLAYER_SPEED};
     game.isDieSoundtrackPlayed = false;
+    memset(game.playerScores, 0, sizeof(game.playerScores));
 }
 
 static void initGame() {
@@ -1279,7 +1279,7 @@ static void createExplosion(ExplosionType type, Vector2 targetPos,
     }
 }
 
-static void destroyTank(Tank *t) {
+static void destroyTank(Tank *t, bool scorePopup) {
     t->status = TSDead;
     t->lifes--;
     if (isEnemy(t)) {
@@ -1288,8 +1288,9 @@ static void destroyTank(Tank *t) {
     if (t->powerUp) {
         t->powerUp->isActive = true;
     }
-    int scorePopupTexCol =
-        isEnemy(t) ? game.tankSpecs[t->type].points / 100 - 1 : -1;
+    int scorePopupTexCol = scorePopup && isEnemy(t)
+                               ? game.tankSpecs[t->type].points / 100 - 1
+                               : -1;
     createExplosion(ETBig, t->pos, TANK_SIZE, scorePopupTexCol);
 }
 
@@ -1297,7 +1298,7 @@ static void destroyAllTanks() {
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *t = &game.tanks[i + 2];
         if (t->status == TSActive)
-            destroyTank(t);
+            destroyTank(t, false);
     }
     PlaySound(game.sounds.bullet_explosion);
 }
@@ -1310,13 +1311,21 @@ static void addScore(TankType type, int score) {
 static void handlePowerUpHit(Tank *t) {
     if (isEnemy(t))
         return;
+    int tankHitboxOffset = 2;
+    int powerUpHitboxOffset = 6;
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         PowerUp *p = &game.powerUps[i];
         if (p->isActive &&
-            collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, p->pos.x,
-                      p->pos.y, POWER_UP_SIZE, POWER_UP_SIZE)) {
+            collision(t->pos.x + tankHitboxOffset, t->pos.y + tankHitboxOffset,
+                      TANK_SIZE - (tankHitboxOffset * 2),
+                      TANK_SIZE - (tankHitboxOffset * 2),
+                      p->pos.x + powerUpHitboxOffset,
+                      p->pos.y + powerUpHitboxOffset,
+                      POWER_UP_SIZE - (powerUpHitboxOffset * 2),
+                      POWER_UP_SIZE - (powerUpHitboxOffset * 2))) {
             p->isActive = false;
             PlaySound(game.sounds.powerup_pick);
+            createScorePopup(4, p->pos, POWER_UP_SIZE);
             addScore(t->type, POWERUP_SCORE);
             switch (p->type) {
             case PUTank:
@@ -1624,7 +1633,7 @@ static void checkBulletHit(Bullet *b) {
                 if (!isEnemy(b->tank) && !isEnemy(t)) {
                     t->immobileTimeLeft = IMMOBILE_TIME;
                 } else if (t->lifes == 1 || !isEnemy(t)) {
-                    destroyTank(t);
+                    destroyTank(t, true);
                     handlePlayerKill(t);
                     if (!isEnemy(b->tank)) {
                         addScore(b->tank->type, game.tankSpecs[t->type].points);
