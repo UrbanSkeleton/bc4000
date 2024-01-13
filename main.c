@@ -7,7 +7,7 @@
 #include "utils.c"
 
 // #define DRAW_CELL_GRID
-#define ALT_ASSETS
+// #define ALT_ASSETS
 
 #ifdef ALT_ASSETS
 #define ASSETDIR "alt"
@@ -77,8 +77,9 @@ const int SCREEN_WIDTH = FIELD_COLS * CELL_SIZE;
 const int SCREEN_HEIGHT = FIELD_ROWS * CELL_SIZE;
 const int SNAP_TO = CELL_SIZE * 2;
 const int TANK_SIZE = CELL_SIZE * 4;
-const int FLAG_SIZE = TANK_SIZE;
 const int TANK_TEXTURE_SIZE = 16;
+const int TANK_HITBOX_SIZE = (TANK_TEXTURE_SIZE - 1) * 4;
+const int FLAG_SIZE = TANK_SIZE;
 const Vector2 POWER_UP_TEXTURE_SIZE = {30, 28};
 const int POWER_UP_SIZE = CELL_SIZE * 4;
 const int SPAWN_TEXTURE_SIZE = 32;
@@ -96,6 +97,10 @@ const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 100;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
+const int MAX_SCORE_POPUP_COUNT = MAX_BULLET_COUNT;
+const Vector2 SCORE_POPUP_TEXTURE_SIZE = (Vector2){16, 9};
+const Vector2 SCORE_POPUP_SIZE = (Vector2){16 * 4, 9 * 4};
+const float SCORE_POPUP_TTL = 0.5;
 const short BULLET_SPEEDS[3] = {450, 500, 550};
 const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
@@ -230,7 +235,14 @@ typedef struct {
     Vector2 pos;
     float ttl;
     float maxTtl;
+    int scorePopupTexCol;
 } Explosion;
+
+typedef struct {
+    int texCol;
+    Vector2 pos;
+    float ttl;
+} ScorePopup;
 
 typedef enum { BTNone, BTTank } BulletType;
 
@@ -295,6 +307,7 @@ typedef struct {
     Texture2D gameOver;
     Texture2D gameOverCurtain;
     Texture2D pause;
+    Texture2D scores;
 } Textures;
 
 typedef struct {
@@ -350,6 +363,7 @@ typedef struct {
     PowerUpSpec powerUpSpecs[PUMax];
     Animation explosionAnimations[ETMax];
     Explosion explosions[MAX_EXPLOSION_COUNT];
+    ScorePopup scorePopups[MAX_SCORE_POPUP_COUNT];
     Textures textures;
     Sounds sounds;
     float frameTime;
@@ -509,6 +523,22 @@ static void drawBullets() {
     }
 }
 
+static void drawScorePopups() {
+    for (int i = 0; i < MAX_SCORE_POPUP_COUNT; i++) {
+        ScorePopup *s = &game.scorePopups[i];
+        if (s->ttl <= 0)
+            continue;
+        Texture2D *tex = &game.textures.scores;
+        DrawTexturePro(*tex,
+                       (Rectangle){s->texCol * SCORE_POPUP_TEXTURE_SIZE.x, 0,
+                                   SCORE_POPUP_TEXTURE_SIZE.x,
+                                   SCORE_POPUP_TEXTURE_SIZE.y},
+                       (Rectangle){s->pos.x, s->pos.y, SCORE_POPUP_SIZE.x,
+                                   SCORE_POPUP_SIZE.y},
+                       (Vector2){}, 0, WHITE);
+    }
+}
+
 static void drawExplosions() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         Explosion *e = &game.explosions[i];
@@ -648,6 +678,7 @@ static void drawGame() {
     drawFlag();
     drawForest();
     drawExplosions();
+    drawScorePopups();
     drawPowerUps();
     drawUI();
     drawStageCurtain();
@@ -686,6 +717,7 @@ static void loadSounds() {
 
 static void loadTextures() {
     game.textures.flag = LoadTexture("textures/" ASSETDIR "/flag.png");
+    game.textures.scores = LoadTexture("textures/" ASSETDIR "/scores.png");
     game.textures.pause = LoadTexture("textures/" ASSETDIR "/pause.png");
     game.textures.deadFlag = LoadTexture("textures/" ASSETDIR "/deadFlag.png");
     game.textures.gameOver = LoadTexture("textures/" ASSETDIR "/gameOver.png");
@@ -966,6 +998,7 @@ static void initStage(char stage) {
             .pos = (Vector2){CELL_SIZE * startingCols[i % 3], CELL_SIZE * 2},
             .direction = DDown,
             .status = TSPending,
+            .isMoving = true,
             .lifes = game.tankSpecs[type].lifes};
         if (i + 1 == 4)
             game.tanks[i + 2].powerUp = &game.powerUps[0];
@@ -1131,12 +1164,16 @@ static bool checkTankToFlagCollision(Tank *t) {
 }
 
 static bool checkTankToTankCollision(Tank *t) {
+    int hitboxOffset = 2;
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *tank = &game.tanks[i];
         if (t == tank || tank->status != TSActive)
             continue;
-        if (collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, tank->pos.x,
-                      tank->pos.y, TANK_SIZE, TANK_SIZE))
+        if (collision(
+                t->pos.x + hitboxOffset, t->pos.y + hitboxOffset,
+                TANK_SIZE - (hitboxOffset * 2), TANK_SIZE - (hitboxOffset * 2),
+                tank->pos.x + hitboxOffset, tank->pos.y + hitboxOffset,
+                TANK_SIZE - (hitboxOffset * 2), TANK_SIZE - (hitboxOffset * 2)))
             return true;
     }
     return false;
@@ -1212,8 +1249,22 @@ static void updatePlayerLifesUI() {
         digitTextureRect(game.tanks[1].lifes);
 }
 
+static void createScorePopup(int texCol, Vector2 targetPos, int targetSize) {
+    Vector2 offset = {(SCORE_POPUP_SIZE.x - targetSize) / 2,
+                      (SCORE_POPUP_SIZE.y - targetSize) / 2};
+    for (int i = 0; i < MAX_SCORE_POPUP_COUNT; i++) {
+        if (game.scorePopups[i].ttl <= 0) {
+            game.scorePopups[i].ttl = SCORE_POPUP_TTL;
+            game.scorePopups[i].pos =
+                (Vector2){targetPos.x - offset.x, targetPos.y - offset.y};
+            game.scorePopups[i].texCol = texCol;
+            break;
+        }
+    }
+}
+
 static void createExplosion(ExplosionType type, Vector2 targetPos,
-                            int targetSize) {
+                            int targetSize, int scorePopupTexCol) {
     int explosionSize = game.explosionAnimations[type].textures[0].width * 2;
     int offset = (explosionSize - targetSize) / 2;
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
@@ -1222,6 +1273,7 @@ static void createExplosion(ExplosionType type, Vector2 targetPos,
             game.explosions[i].type = type;
             game.explosions[i].pos =
                 (Vector2){targetPos.x - offset, targetPos.y - offset};
+            game.explosions[i].scorePopupTexCol = scorePopupTexCol;
             break;
         }
     }
@@ -1236,7 +1288,9 @@ static void destroyTank(Tank *t) {
     if (t->powerUp) {
         t->powerUp->isActive = true;
     }
-    createExplosion(ETBig, t->pos, TANK_SIZE);
+    int scorePopupTexCol =
+        isEnemy(t) ? game.tankSpecs[t->type].points / 100 - 1 : -1;
+    createExplosion(ETBig, t->pos, TANK_SIZE, scorePopupTexCol);
 }
 
 static void destroyAllTanks() {
@@ -1245,6 +1299,7 @@ static void destroyAllTanks() {
         if (t->status == TSActive)
             destroyTank(t);
     }
+    PlaySound(game.sounds.bullet_explosion);
 }
 
 static void addScore(TankType type, int score) {
@@ -1381,10 +1436,10 @@ static void handleTankAI(Tank *t) {
     static Direction dirs[] = {DDown,  DDown, DDown, DDown, DRight,
                                DRight, DLeft, DLeft, DUp};
     Command cmd = {};
-    cmd.fire = randomTrue(0.01f);
-    cmd.move = t->isMoving ? randomTrue(0.995f) : randomTrue(0.08f);
+    cmd.fire = randomTrue(0.03f);
+    cmd.move = t->isMoving ? randomTrue(0.999f) : randomTrue(0.50f);
     if (cmd.move) {
-        cmd.direction = (t->isMoving && randomTrue(0.99f))
+        cmd.direction = (t->isMoving && randomTrue(0.999f))
                             ? t->direction
                             : dirs[rand() % ASIZE(dirs)];
     }
@@ -1462,7 +1517,7 @@ static void destroyBullet(Bullet *b, bool explosion) {
         b->tank->firedBulletCount--;
     }
     if (explosion) {
-        createExplosion(ETBullet, b->pos, BULLET_SIZE);
+        createExplosion(ETBullet, b->pos, BULLET_SIZE, -1);
     }
 }
 
@@ -1605,7 +1660,7 @@ static bool checkBulletToBulletCollision(Bullet *b) {
 }
 
 static void destroyFlag() {
-    createExplosion(ETBig, game.flagPos, FLAG_SIZE);
+    createExplosion(ETBig, game.flagPos, FLAG_SIZE, -1);
     game.isFlagDead = true;
 }
 
@@ -1673,8 +1728,22 @@ static void updateBulletsState() {
 
 static void updateExplosionsState() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
-        if (game.explosions[i].ttl > 0) {
-            game.explosions[i].ttl -= game.frameTime;
+        Explosion *e = &game.explosions[i];
+        if (e->ttl > 0) {
+            e->ttl -= game.frameTime;
+            if (e->ttl <= 0 && e->scorePopupTexCol != -1) {
+                createScorePopup(
+                    e->scorePopupTexCol, e->pos,
+                    game.explosionAnimations[ETBig].textures[0].width * 2);
+            }
+        }
+    }
+}
+
+static void updateScorePopupsState() {
+    for (int i = 0; i < MAX_SCORE_POPUP_COUNT; i++) {
+        if (game.scorePopups[i].ttl > 0) {
+            game.scorePopups[i].ttl -= game.frameTime;
         }
     }
 }
@@ -1698,6 +1767,7 @@ static void updateGameState() {
     game.cellSpecs[CTRiver].texture =
         &game.textures.river[((long)(game.totalTime * 2)) % 2];
     updateExplosionsState();
+    updateScorePopupsState();
     updateBulletsState();
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *tank = &game.tanks[i];
