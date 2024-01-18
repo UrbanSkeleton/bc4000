@@ -100,7 +100,7 @@ const int MAX_SCORE_POPUP_COUNT = MAX_BULLET_COUNT;
 const Vector2 SCORE_POPUP_TEXTURE_SIZE = (Vector2){16, 9};
 const Vector2 SCORE_POPUP_SIZE = (Vector2){16 * 4, 9 * 4};
 const float SCORE_POPUP_TTL = 0.5;
-const short BULLET_SPEEDS[3] = {450, 500, 550};
+const short BULLET_SPEEDS[3] = {450, 550, 600};
 const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
@@ -196,7 +196,7 @@ typedef struct {
 typedef struct {
     PowerUpType type;
     Vector2 pos;
-    bool isActive;
+    enum { PUSPending, PUSActive, PUSPickedUp } state;
 } PowerUp;
 
 typedef struct {
@@ -617,7 +617,7 @@ static void drawPowerUp(PowerUp *p) {
 static void drawPowerUps() {
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         PowerUp *p = &game.powerUps[i];
-        if (p->isActive) {
+        if (p->state == PUSActive) {
             drawPowerUp(p);
         }
     }
@@ -1010,7 +1010,7 @@ static void initStage(char stage) {
         game.powerUps[i] = (PowerUp){
             .type = rand() % PUMax,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
-            .isActive = false};
+            .state = PUSPending};
     }
     memset(game.bullets, 0, sizeof(game.bullets));
     memset(game.explosions, 0, sizeof(game.explosions));
@@ -1285,9 +1285,6 @@ static void destroyTank(Tank *t, bool scorePopup) {
     if (isEnemy(t)) {
         game.activeEnemyCount--;
     }
-    if (t->powerUp) {
-        t->powerUp->isActive = true;
-    }
     int scorePopupTexCol = scorePopup && isEnemy(t)
                                ? game.tankSpecs[t->type].points / 100 - 1
                                : -1;
@@ -1315,7 +1312,7 @@ static void handlePowerUpHit(Tank *t) {
     int powerUpHitboxOffset = 6;
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         PowerUp *p = &game.powerUps[i];
-        if (p->isActive &&
+        if (p->state == PUSActive &&
             collision(t->pos.x + tankHitboxOffset, t->pos.y + tankHitboxOffset,
                       TANK_SIZE - (tankHitboxOffset * 2),
                       TANK_SIZE - (tankHitboxOffset * 2),
@@ -1323,7 +1320,7 @@ static void handlePowerUpHit(Tank *t) {
                       p->pos.y + powerUpHitboxOffset,
                       POWER_UP_SIZE - (powerUpHitboxOffset * 2),
                       POWER_UP_SIZE - (powerUpHitboxOffset * 2))) {
-            p->isActive = false;
+            p->state = PUSPickedUp;
             PlaySound(game.sounds.powerup_pick);
             createScorePopup(4, p->pos, POWER_UP_SIZE);
             addScore(t->type, POWERUP_SCORE);
@@ -1624,32 +1621,35 @@ static void checkBulletHit(Bullet *b) {
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *t = &game.tanks[i];
         if (t->status != TSActive || b->tank == t ||
-            (isEnemy(b->tank) && isEnemy(t)))
+            (isEnemy(b->tank) && isEnemy(t)) ||
+            !collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, t->pos.x,
+                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
             continue;
-        if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, t->pos.x,
-                      t->pos.y, TANK_SIZE, TANK_SIZE)) {
-            destroyBullet(b, true);
-            if (t->shieldTimeLeft <= 0) {
-                if (!isEnemy(b->tank) && !isEnemy(t)) {
-                    t->immobileTimeLeft = IMMOBILE_TIME;
-                } else if (t->lifes == 1 || !isEnemy(t)) {
-                    destroyTank(t, true);
-                    handlePlayerKill(t);
-                    if (!isEnemy(b->tank)) {
-                        addScore(b->tank->type, game.tankSpecs[t->type].points);
-                        game.playerScores[b->tank->type].kills[t->type]++;
-                    }
-                    PlaySound(isEnemy(t)
-                                  ? (t->powerUp ? game.sounds.powerup_appear
-                                                : game.sounds.bullet_explosion)
-                                  : game.sounds.big_explosion);
-                } else {
-                    PlaySound(game.sounds.bullet_hit_1);
-                    t->lifes--;
-                }
-            }
+        }
+        destroyBullet(b, true);
+        if (t->shieldTimeLeft > 0)
+            break;
+        if (!isEnemy(b->tank) && !isEnemy(t)) {
+            t->immobileTimeLeft = IMMOBILE_TIME;
             break;
         }
+        if (t->powerUp && t->powerUp->state == PUSPending) {
+            t->powerUp->state = PUSActive;
+            PlaySound(game.sounds.powerup_appear);
+        }
+        if (isEnemy(t) && t->lifes > 1) {
+            PlaySound(game.sounds.bullet_hit_1);
+            t->lifes--;
+            break;
+        }
+        destroyTank(t, true);
+        handlePlayerKill(t);
+        if (!isEnemy(b->tank)) {
+            addScore(b->tank->type, game.tankSpecs[t->type].points);
+            game.playerScores[b->tank->type].kills[t->type]++;
+        }
+        PlaySound(isEnemy(t) ? game.sounds.bullet_explosion
+                             : game.sounds.big_explosion);
     }
 }
 
@@ -1789,7 +1789,9 @@ static void updateGameState() {
                 tank->status = TSActive;
                 if (tank->powerUp) {
                     for (int k = 0; k < MAX_POWERUP_COUNT; k++) {
-                        game.powerUps[k].isActive = false;
+                        if (game.powerUps[k].state == PUSActive) {
+                            game.powerUps[k].state = PUSPickedUp;
+                        }
                     }
                 }
             }
