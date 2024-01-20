@@ -104,7 +104,7 @@ const short BULLET_SPEEDS[3] = {450, 550, 600};
 const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
-const float ENEMY_SPAWN_INTERVAL = 2.0f;
+const float ENEMY_SPAWN_INTERVAL = 3.0f;
 const float SPAWNING_TIME = 0.7f;
 const int POWERUP_POSITIONS_COUNT = 16;
 const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
@@ -969,7 +969,6 @@ static TankType levelTanks[35][MAX_ENEMY_COUNT] = {
 
 static void initStage(char stage) {
     game.stage = stage;
-    game.isFlagDead = false;
     game.gameOverTime = 0;
     game.stageEndTime = 0;
     game.timerPowerUpTimeLeft = 0;
@@ -1015,7 +1014,7 @@ static void initStage(char stage) {
     memset(game.bullets, 0, sizeof(game.bullets));
     memset(game.explosions, 0, sizeof(game.explosions));
     game.pendingEnemyCount = MAX_ENEMY_COUNT;
-    game.maxActiveEnemyCount = 10;
+    game.maxActiveEnemyCount = 8;
     game.timeSinceSpawn = ENEMY_SPAWN_INTERVAL;
     game.activeEnemyCount = 0;
     initUIElements();
@@ -1030,6 +1029,7 @@ static void loadHiScore() {
 }
 
 static void initGameRun() {
+    game.isFlagDead = false;
     game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
     game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
@@ -1164,7 +1164,7 @@ static bool checkTankToFlagCollision(Tank *t) {
 }
 
 static bool checkTankToTankCollision(Tank *t) {
-    int hitboxOffset = 2;
+    int hitboxOffset = 4;
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *tank = &game.tanks[i];
         if (t == tank || tank->status != TSActive)
@@ -1308,7 +1308,7 @@ static void addScore(TankType type, int score) {
 static void handlePowerUpHit(Tank *t) {
     if (isEnemy(t))
         return;
-    int tankHitboxOffset = 2;
+    int tankHitboxOffset = 4;
     int powerUpHitboxOffset = 6;
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
         PowerUp *p = &game.powerUps[i];
@@ -1618,12 +1618,15 @@ static void checkStageEnd() {
 }
 
 static void checkBulletHit(Bullet *b) {
+    int tankHitboxOffset = 4;
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *t = &game.tanks[i];
         if (t->status != TSActive || b->tank == t ||
             (isEnemy(b->tank) && isEnemy(t)) ||
-            !collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, t->pos.x,
-                       t->pos.y, TANK_SIZE, TANK_SIZE)) {
+            !collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE,
+                       t->pos.x + tankHitboxOffset, t->pos.y + tankHitboxOffset,
+                       TANK_SIZE - (tankHitboxOffset * 2),
+                       TANK_SIZE - (tankHitboxOffset * 2))) {
             continue;
         }
         destroyBullet(b, true);
@@ -1674,7 +1677,8 @@ static void destroyFlag() {
 }
 
 static bool checkFlagHit(Bullet *b) {
-    if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, game.flagPos.x,
+    if (!game.isFlagDead &&
+        collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, game.flagPos.x,
                   game.flagPos.y, FLAG_SIZE, FLAG_SIZE)) {
         destroyBullet(b, true);
         destroyFlag();
@@ -1966,7 +1970,7 @@ static void titleLogic() {
         game.title = (Title){0};
         setScreen(GSPlay);
         initGameRun();
-        initStage(1);
+        initStage(17);
     }
 }
 
@@ -2122,6 +2126,7 @@ int main(void) {
     initGame();
     setScreen(GSTitle);
 
+    SetExitKey(0);
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
 
