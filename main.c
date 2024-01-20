@@ -56,6 +56,8 @@ const CellInfo fortressWall[] = {
     {13 * 4 - 6 + 2, 6 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 2 + 4},
     {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
 };
+
+const float SLIDING_TIME = 0.6;
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
 const float IMMOBILE_TIME = 5;
@@ -213,6 +215,7 @@ typedef struct {
     char tier;
     float shieldTimeLeft;
     float immobileTimeLeft;
+    float slidingTimeLeft;
 } Tank;
 
 typedef struct {
@@ -1190,6 +1193,9 @@ static bool checkTankCollision(Tank *tank) {
             if (!game.cellSpecs[cellType].isPassable) {
                 tank->pos.x = game.field[r][col].pos.x - TANK_SIZE;
                 return true;
+            } else if (cellType == CTIce && !isEnemy(tank) &&
+                       tank->slidingTimeLeft <= 0) {
+                tank->slidingTimeLeft = SLIDING_TIME;
             }
         }
         return false;
@@ -1203,6 +1209,9 @@ static bool checkTankCollision(Tank *tank) {
             if (!game.cellSpecs[cellType].isPassable) {
                 tank->pos.x = game.field[r][col].pos.x + CELL_SIZE;
                 return true;
+            } else if (cellType == CTIce && !isEnemy(tank) &&
+                       tank->slidingTimeLeft <= 0) {
+                tank->slidingTimeLeft = SLIDING_TIME;
             }
         }
         return false;
@@ -1216,6 +1225,9 @@ static bool checkTankCollision(Tank *tank) {
             if (!game.cellSpecs[cellType].isPassable) {
                 tank->pos.y = game.field[row][c].pos.y + CELL_SIZE;
                 return true;
+            } else if (cellType == CTIce && !isEnemy(tank) &&
+                       tank->slidingTimeLeft <= 0) {
+                tank->slidingTimeLeft = SLIDING_TIME;
             }
         }
         return false;
@@ -1229,6 +1241,9 @@ static bool checkTankCollision(Tank *tank) {
             if (!game.cellSpecs[cellType].isPassable) {
                 tank->pos.y = game.field[row][c].pos.y - TANK_SIZE;
                 return true;
+            } else if (cellType == CTIce && !isEnemy(tank) &&
+                       tank->slidingTimeLeft <= 0) {
+                tank->slidingTimeLeft = SLIDING_TIME;
             }
         }
         return false;
@@ -1381,6 +1396,14 @@ static void handleCommand(Tank *t, Command cmd) {
     }
     if (t->immobileTimeLeft > 0)
         return;
+    if (t->slidingTimeLeft > 0) {
+        if (!cmd.move) {
+            cmd.move = true;
+            cmd.direction = t->direction;
+        } else {
+            t->slidingTimeLeft = 0;
+        }
+    }
     t->isMoving = cmd.move;
     if (!cmd.move)
         return;
@@ -1597,6 +1620,8 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
 static void gameOver() { game.gameOverTime = 0.001; }
 
 static void handlePlayerKill(Tank *t) {
+    if (game.gameOverTime > 0)
+        return;
     if (isEnemy(t))
         return;
     if (t->lifes < 0) {
@@ -1677,7 +1702,7 @@ static void destroyFlag() {
 }
 
 static bool checkFlagHit(Bullet *b) {
-    if (!game.isFlagDead &&
+    if (!game.gameOverTime &&
         collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, game.flagPos.x,
                   game.flagPos.y, FLAG_SIZE, FLAG_SIZE)) {
         destroyBullet(b, true);
@@ -2055,6 +2080,12 @@ static void gameLogic() {
     }
     if (game.tanks[TPlayer2].immobileTimeLeft > 0) {
         game.tanks[TPlayer2].immobileTimeLeft -= game.frameTime;
+    }
+    if (game.tanks[TPlayer1].slidingTimeLeft > 0) {
+        game.tanks[TPlayer1].slidingTimeLeft -= game.frameTime;
+    }
+    if (game.tanks[TPlayer2].slidingTimeLeft > 0) {
+        game.tanks[TPlayer2].slidingTimeLeft -= game.frameTime;
     }
     handleInput();
     handleAI();
