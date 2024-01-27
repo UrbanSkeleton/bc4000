@@ -25,6 +25,9 @@ static void titleLogic();
 static void drawTitle();
 static void gameOverCurtainLogic();
 static void drawGameOverCurtain();
+static void congratsLogic();
+static void drawCongrats();
+static void saveHiScore();
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
@@ -57,6 +60,7 @@ const CellInfo fortressWall[] = {
     {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
 };
 
+const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
 const int FONT_SIZE = 40;
 const float TITLE_SLIDE_TIME = 1;
@@ -340,7 +344,7 @@ typedef struct {
 
 typedef enum { GMOnePlayer, GMTwoPlayers } GameMode;
 
-typedef enum { GSTitle, GSPlay, GSScore, GSGameOver } GameScreen;
+typedef enum { GSTitle, GSPlay, GSScore, GSGameOver, GSCongrats } GameScreen;
 
 typedef struct {
     void (*logic)(void);
@@ -352,6 +356,7 @@ static GameFunctions gameFunctions[] = {
     {.logic = gameLogic, .draw = drawGame},
     {.logic = stageSummaryLogic, .draw = drawStageSummary},
     {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
+    {.logic = congratsLogic, .draw = drawCongrats},
 };
 
 typedef struct {
@@ -930,7 +935,7 @@ static void spawnPlayer(Tank *t, bool resetTier) {
     }
 }
 
-static TankType levelTanks[35][MAX_ENEMY_COUNT] = {
+static TankType levelTanks[LEVEL_COUNT][MAX_ENEMY_COUNT] = {
     // clang-format off
     {TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TFast,TFast},
     {TArmor,TArmor,TFast, TFast, TFast, TFast, TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic,TBasic},
@@ -1032,6 +1037,7 @@ static void loadHiScore() {
 }
 
 static void initGameRun() {
+    saveHiScore();
     game.isFlagDead = false;
     game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
     game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
@@ -1663,6 +1669,7 @@ static void checkBulletHit(Bullet *b) {
         }
         if (t->powerUp && t->powerUp->state == PUSPending) {
             t->powerUp->state = PUSActive;
+            t->powerUp = NULL;
             PlaySound(game.sounds.powerup_appear);
         }
         if (isEnemy(t) && t->lifes > 1) {
@@ -1853,6 +1860,33 @@ static void drawGameOverCurtain() {
                    WHITE);
 }
 
+static void congratsLogic() {
+    if (IsKeyPressed(KEY_ENTER)) {
+        setScreen(GSTitle);
+    }
+}
+
+static void drawCongrats() {
+    int topY = SCREEN_HEIGHT / 3;
+    static const int N = 256;
+    char text[N];
+    int score = MAX(game.playerScores[TPlayer1].totalScore,
+                    game.playerScores[TPlayer2].totalScore);
+    char *congratsText = "CONGRATULATIONS!";
+
+    drawText(congratsText, centerX(measureText(congratsText, FONT_SIZE * 2)),
+             topY, FONT_SIZE * 2, (Color){255, 0, 0, 255});
+
+    topY += 200;
+
+    snprintf(text, N, "HI-SCORE  %7d", score);
+    int x = centerX(measureText(text, FONT_SIZE));
+    drawText("SCORE", x, topY, FONT_SIZE, (Color){205, 62, 26, 255});
+    snprintf(text, N, "%7d", score);
+    drawText(text, x + measureText("HI-SCORE  ", FONT_SIZE), topY, FONT_SIZE,
+             (Color){241, 159, 80, 255});
+}
+
 static void stageSummaryLogic() {
     game.stageSummary.time += game.frameTime;
     if (IsKeyPressed(KEY_ENTER)) {
@@ -1861,6 +1895,8 @@ static void stageSummaryLogic() {
             PlaySound(game.sounds.game_over);
 #endif
             setScreen(GSGameOver);
+        } else if (game.stage == LEVEL_COUNT) {
+            setScreen(GSCongrats);
         } else {
             initStage(game.stage + 1);
             setScreen(GSPlay);
@@ -1995,7 +2031,7 @@ static void titleLogic() {
         game.title = (Title){0};
         setScreen(GSPlay);
         initGameRun();
-        initStage(17);
+        initStage(1);
     }
 }
 
