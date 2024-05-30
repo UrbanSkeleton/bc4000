@@ -1,5 +1,7 @@
 This is a clone of NES game Battle City, written in C using [raylib](https://www.raylib.com) library.
 
+![image](https://github.com/candid82/bc4000/assets/882970/1f87a43c-2b9b-46da-bf1b-0575d50b8ecb)
+
 ## Rationale
 
 Nah, I did it just for fun.
