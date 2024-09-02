@@ -3,9 +3,10 @@
 #include <stdlib.h>
 
 typedef uint32_t u32;
+typedef uint8_t u8;
 
 typedef struct {
-    char *bytes;
+    u8 *bytes;
     long size;
 } Buffer;
 

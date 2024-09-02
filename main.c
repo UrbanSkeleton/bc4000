@@ -1,9 +1,9 @@
-#include "raylib.h"
-#include "raymath.h"
 #include <assert.h>
 #include <string.h>
 #include <time.h>
 
+#include "raylib.h"
+#include "raymath.h"
 #include "utils.c"
 
 // #define DRAW_CELL_GRID
@@ -431,8 +431,7 @@ static void drawCell(Cell *cell) {
 static void drawField() {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            if (game.field[i][j].type != CTForest)
-                drawCell(&game.field[i][j]);
+            if (game.field[i][j].type != CTForest) drawCell(&game.field[i][j]);
         }
     }
 }
@@ -440,15 +439,13 @@ static void drawField() {
 static void drawForest() {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            if (game.field[i][j].type == CTForest)
-                drawCell(&game.field[i][j]);
+            if (game.field[i][j].type == CTForest) drawCell(&game.field[i][j]);
         }
     }
 }
 
 static void drawTank(Tank *tank) {
-    if (tank->immobileTimeLeft > 0 && (long)(game.totalTime * 8) % 2)
-        return;
+    if (tank->immobileTimeLeft > 0 && (long)(game.totalTime * 8) % 2) return;
     static char textureRows[4] = {1, 3, 0, 2};
     Texture2D *tex = !tank->powerUp || ((long)(game.totalTime * 8)) % 2
                          ? game.tankSpecs[tank->type].texture
@@ -488,8 +485,7 @@ static void drawSpawningTank(Tank *tank) {
     Texture2D *tex = &game.textures.spawningTank;
     int textureSize = tex->height;
     int i = tank->spawningTime / (SPAWNING_TIME / ASIZE(textureCols));
-    if (i >= ASIZE(textureCols))
-        i = ASIZE(textureCols) - 1;
+    if (i >= ASIZE(textureCols)) i = ASIZE(textureCols) - 1;
     int texX = textureCols[i] * textureSize;
     int drawSize = SPAWN_TEXTURE_SIZE * 2;
     DrawTexturePro(*tex, (Rectangle){texX, 0, textureSize, textureSize},
@@ -521,8 +517,7 @@ static void drawBullets() {
     Texture2D *tex = &game.textures.bullet;
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
-        if (b->type == BTNone)
-            continue;
+        if (b->type == BTNone) continue;
         DrawTexturePro(
             *tex, (Rectangle){x[b->direction], 0, 8, 8},
             (Rectangle){b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE},
@@ -533,29 +528,26 @@ static void drawBullets() {
 static void drawScorePopups() {
     for (int i = 0; i < MAX_SCORE_POPUP_COUNT; i++) {
         ScorePopup *s = &game.scorePopups[i];
-        if (s->ttl <= 0)
-            continue;
+        if (s->ttl <= 0) continue;
         Texture2D *tex = &game.textures.scores;
-        DrawTexturePro(*tex,
-                       (Rectangle){s->texCol * SCORE_POPUP_TEXTURE_SIZE.x, 0,
-                                   SCORE_POPUP_TEXTURE_SIZE.x,
-                                   SCORE_POPUP_TEXTURE_SIZE.y},
-                       (Rectangle){s->pos.x, s->pos.y, SCORE_POPUP_SIZE.x,
-                                   SCORE_POPUP_SIZE.y},
-                       (Vector2){}, 0, WHITE);
+        DrawTexturePro(
+            *tex,
+            (Rectangle){s->texCol * SCORE_POPUP_TEXTURE_SIZE.x, 0,
+                        SCORE_POPUP_TEXTURE_SIZE.x, SCORE_POPUP_TEXTURE_SIZE.y},
+            (Rectangle){s->pos.x, s->pos.y, SCORE_POPUP_SIZE.x,
+                        SCORE_POPUP_SIZE.y},
+            (Vector2){}, 0, WHITE);
     }
 }
 
 static void drawExplosions() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         Explosion *e = &game.explosions[i];
-        if (e->ttl <= 0)
-            continue;
+        if (e->ttl <= 0) continue;
         int texCount = game.explosionAnimations[e->type].textureCount;
         int index =
             e->ttl / (game.explosionAnimations[e->type].duration / texCount);
-        if (index >= texCount)
-            index = texCount - 1;
+        if (index >= texCount) index = texCount - 1;
         Texture2D *tex =
             &game.explosionAnimations[e->type].textures[texCount - index - 1];
         DrawTexturePro(
@@ -590,8 +582,7 @@ static void drawUIElement(UIElement *el) {
 
 static void drawUIElements() {
     for (int i = 0; i < UIMax; i++) {
-        if (game.uiElements[i].isVisible)
-            drawUIElement(&game.uiElements[i]);
+        if (game.uiElements[i].isVisible) drawUIElement(&game.uiElements[i]);
     }
 }
 
@@ -606,8 +597,7 @@ static void drawUI() {
 }
 
 static void drawPowerUp(PowerUp *p) {
-    if (((long)(game.totalTime * 8)) % 2)
-        return;
+    if (((long)(game.totalTime * 8)) % 2) return;
     Texture2D *tex = game.powerUpSpecs[p->type].texture;
     Vector2 drawSize = {POWER_UP_TEXTURE_SIZE.x * 2,
                         POWER_UP_TEXTURE_SIZE.y * 2};
@@ -635,8 +625,7 @@ static int centerX(int size) { return (SCREEN_WIDTH - size) / 2; }
 static int centerY(int size) { return (SCREEN_HEIGHT - size) / 2; }
 
 static void drawGameOver() {
-    if (!game.gameOverTime)
-        return;
+    if (!game.gameOverTime) return;
     Texture2D *tex = &game.textures.gameOver;
     int w = tex->width * 4;
     int h = tex->height * 4;
@@ -648,8 +637,7 @@ static void drawGameOver() {
 }
 
 static void drawStageCurtain() {
-    if (game.stageCurtainTime >= STAGE_CURTAIN_TIME)
-        return;
+    if (game.stageCurtainTime >= STAGE_CURTAIN_TIME) return;
     float delayTime = STAGE_CURTAIN_TIME - 0.5;
     int visibleHeight =
         SCREEN_HEIGHT * (MAX(game.stageCurtainTime - delayTime, 0) /
@@ -668,8 +656,7 @@ static void drawStageCurtain() {
 }
 
 static void drawPause() {
-    if (!game.isPaused || ((long)(game.totalTime * 2)) % 2)
-        return;
+    if (!game.isPaused || ((long)(game.totalTime * 2)) % 2) return;
     Texture2D *tex = &game.textures.pause;
     int w = tex->width * 4;
     int h = tex->height * 4;
@@ -1030,8 +1017,10 @@ static void initStage(char stage) {
 
 static void loadHiScore() {
     Buffer b = readFile("hiscore");
-    if (b.size < 4)
-        return;
+    if (b.size < 4) {
+        fprintf(stderr, "Cannot read hiscore");
+        exit(1);
+    }
     game.hiScore = (u32)b.bytes[0] | ((u32)b.bytes[1] << 8) |
                    ((u32)b.bytes[2] << 16) | ((u32)b.bytes[3] << 24);
 }
@@ -1125,8 +1114,7 @@ static void initGame() {
 }
 
 static void fireBullet(Tank *t) {
-    if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount)
-        return;
+    if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount) return;
     t->firedBulletCount++;
     if (!isEnemy(t)) {
         PlaySound(game.sounds.player_fire);
@@ -1142,26 +1130,26 @@ static void fireBullet(Tank *t) {
         b->tank = t;
         short bulletSpeed = game.tankSpecs[t->type].bulletSpeed;
         switch (b->direction) {
-        case DRight:
-            b->pos = (Vector2){t->pos.x + TANK_SIZE - BULLET_SIZE,
-                               t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
-            b->speed = (Vector2){bulletSpeed, 0};
-            break;
-        case DLeft:
-            b->pos =
-                (Vector2){t->pos.x, t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
-            b->speed = (Vector2){-bulletSpeed, 0};
-            break;
-        case DUp:
-            b->pos =
-                (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2, t->pos.y};
-            b->speed = (Vector2){0, -bulletSpeed};
-            break;
-        case DDown:
-            b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
-                               t->pos.y + TANK_SIZE - BULLET_SIZE};
-            b->speed = (Vector2){0, bulletSpeed};
-            break;
+            case DRight:
+                b->pos = (Vector2){t->pos.x + TANK_SIZE - BULLET_SIZE,
+                                   t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
+                b->speed = (Vector2){bulletSpeed, 0};
+                break;
+            case DLeft:
+                b->pos = (Vector2){t->pos.x,
+                                   t->pos.y + TANK_SIZE / 2 - BULLET_SIZE / 2};
+                b->speed = (Vector2){-bulletSpeed, 0};
+                break;
+            case DUp:
+                b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
+                                   t->pos.y};
+                b->speed = (Vector2){0, -bulletSpeed};
+                break;
+            case DDown:
+                b->pos = (Vector2){t->pos.x + TANK_SIZE / 2 - BULLET_SIZE / 2,
+                                   t->pos.y + TANK_SIZE - BULLET_SIZE};
+                b->speed = (Vector2){0, bulletSpeed};
+                break;
         }
         break;
     }
@@ -1176,8 +1164,7 @@ static bool checkTankToTankCollision(Tank *t) {
     int hitboxOffset = 4;
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *tank = &game.tanks[i];
-        if (t == tank || tank->status != TSActive)
-            continue;
+        if (t == tank || tank->status != TSActive) continue;
         if (collision(
                 t->pos.x + hitboxOffset, t->pos.y + hitboxOffset,
                 TANK_SIZE - (hitboxOffset * 2), TANK_SIZE - (hitboxOffset * 2),
@@ -1190,70 +1177,70 @@ static bool checkTankToTankCollision(Tank *t) {
 
 static bool checkTankCollision(Tank *tank) {
     switch (tank->direction) {
-    case DRight: {
-        int startRow = ((int)tank->pos.y) / CELL_SIZE;
-        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
-        int col = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
-        for (int r = startRow; r <= endRow; r++) {
-            CellType cellType = game.field[r][col].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->pos.x = game.field[r][col].pos.x - TANK_SIZE;
-                return true;
-            } else if (cellType == CTIce && !isEnemy(tank) &&
-                       tank->slidingTimeLeft <= 0) {
-                tank->slidingTimeLeft = SLIDING_TIME;
+        case DRight: {
+            int startRow = ((int)tank->pos.y) / CELL_SIZE;
+            int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+            int col = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+            for (int r = startRow; r <= endRow; r++) {
+                CellType cellType = game.field[r][col].type;
+                if (!game.cellSpecs[cellType].isPassable) {
+                    tank->pos.x = game.field[r][col].pos.x - TANK_SIZE;
+                    return true;
+                } else if (cellType == CTIce && !isEnemy(tank) &&
+                           tank->slidingTimeLeft <= 0) {
+                    tank->slidingTimeLeft = SLIDING_TIME;
+                }
             }
+            return false;
         }
-        return false;
-    }
-    case DLeft: {
-        int startRow = ((int)tank->pos.y) / CELL_SIZE;
-        int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
-        int col = ((int)tank->pos.x) / CELL_SIZE;
-        for (int r = startRow; r <= endRow; r++) {
-            CellType cellType = game.field[r][col].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->pos.x = game.field[r][col].pos.x + CELL_SIZE;
-                return true;
-            } else if (cellType == CTIce && !isEnemy(tank) &&
-                       tank->slidingTimeLeft <= 0) {
-                tank->slidingTimeLeft = SLIDING_TIME;
+        case DLeft: {
+            int startRow = ((int)tank->pos.y) / CELL_SIZE;
+            int endRow = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+            int col = ((int)tank->pos.x) / CELL_SIZE;
+            for (int r = startRow; r <= endRow; r++) {
+                CellType cellType = game.field[r][col].type;
+                if (!game.cellSpecs[cellType].isPassable) {
+                    tank->pos.x = game.field[r][col].pos.x + CELL_SIZE;
+                    return true;
+                } else if (cellType == CTIce && !isEnemy(tank) &&
+                           tank->slidingTimeLeft <= 0) {
+                    tank->slidingTimeLeft = SLIDING_TIME;
+                }
             }
+            return false;
         }
-        return false;
-    }
-    case DUp: {
-        int startCol = ((int)tank->pos.x) / CELL_SIZE;
-        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
-        int row = ((int)(tank->pos.y)) / CELL_SIZE;
-        for (int c = startCol; c <= endCol; c++) {
-            CellType cellType = game.field[row][c].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->pos.y = game.field[row][c].pos.y + CELL_SIZE;
-                return true;
-            } else if (cellType == CTIce && !isEnemy(tank) &&
-                       tank->slidingTimeLeft <= 0) {
-                tank->slidingTimeLeft = SLIDING_TIME;
+        case DUp: {
+            int startCol = ((int)tank->pos.x) / CELL_SIZE;
+            int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+            int row = ((int)(tank->pos.y)) / CELL_SIZE;
+            for (int c = startCol; c <= endCol; c++) {
+                CellType cellType = game.field[row][c].type;
+                if (!game.cellSpecs[cellType].isPassable) {
+                    tank->pos.y = game.field[row][c].pos.y + CELL_SIZE;
+                    return true;
+                } else if (cellType == CTIce && !isEnemy(tank) &&
+                           tank->slidingTimeLeft <= 0) {
+                    tank->slidingTimeLeft = SLIDING_TIME;
+                }
             }
+            return false;
         }
-        return false;
-    }
-    case DDown: {
-        int startCol = ((int)tank->pos.x) / CELL_SIZE;
-        int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
-        int row = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
-        for (int c = startCol; c <= endCol; c++) {
-            CellType cellType = game.field[row][c].type;
-            if (!game.cellSpecs[cellType].isPassable) {
-                tank->pos.y = game.field[row][c].pos.y - TANK_SIZE;
-                return true;
-            } else if (cellType == CTIce && !isEnemy(tank) &&
-                       tank->slidingTimeLeft <= 0) {
-                tank->slidingTimeLeft = SLIDING_TIME;
+        case DDown: {
+            int startCol = ((int)tank->pos.x) / CELL_SIZE;
+            int endCol = ((int)tank->pos.x + TANK_SIZE - 1) / CELL_SIZE;
+            int row = ((int)tank->pos.y + TANK_SIZE - 1) / CELL_SIZE;
+            for (int c = startCol; c <= endCol; c++) {
+                CellType cellType = game.field[row][c].type;
+                if (!game.cellSpecs[cellType].isPassable) {
+                    tank->pos.y = game.field[row][c].pos.y - TANK_SIZE;
+                    return true;
+                } else if (cellType == CTIce && !isEnemy(tank) &&
+                           tank->slidingTimeLeft <= 0) {
+                    tank->slidingTimeLeft = SLIDING_TIME;
+                }
             }
+            return false;
         }
-        return false;
-    }
     }
 }
 
@@ -1315,8 +1302,7 @@ static void destroyTank(Tank *t, bool scorePopup) {
 static void destroyAllTanks() {
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         Tank *t = &game.tanks[i + 2];
-        if (t->status == TSActive)
-            destroyTank(t, false);
+        if (t->status == TSActive) destroyTank(t, false);
     }
     PlaySound(game.sounds.bullet_explosion);
 }
@@ -1327,8 +1313,7 @@ static void addScore(TankType type, int score) {
 }
 
 static void handlePowerUpHit(Tank *t) {
-    if (isEnemy(t))
-        return;
+    if (isEnemy(t)) return;
     int tankHitboxOffset = 4;
     int powerUpHitboxOffset = 6;
     for (int i = 0; i < MAX_POWERUP_COUNT; i++) {
@@ -1346,48 +1331,48 @@ static void handlePowerUpHit(Tank *t) {
             createScorePopup(4, p->pos, POWER_UP_SIZE);
             addScore(t->type, POWERUP_SCORE);
             switch (p->type) {
-            case PUTank:
-                t->lifes++;
-                updatePlayerLifesUI();
-                break;
-            case PUStar:
-                if (t->tier == 3)
-                    return;
-                t->tier++;
-                game.tankSpecs[t->type].texRow++;
-                switch (t->tier) {
-                case 1:
-                    game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[2];
+                case PUTank:
+                    t->lifes++;
+                    updatePlayerLifesUI();
                     break;
-                case 2:
-                    game.tankSpecs[t->type].maxBulletCount = 2;
+                case PUStar:
+                    if (t->tier == 3) return;
+                    t->tier++;
+                    game.tankSpecs[t->type].texRow++;
+                    switch (t->tier) {
+                        case 1:
+                            game.tankSpecs[t->type].bulletSpeed =
+                                BULLET_SPEEDS[2];
+                            break;
+                        case 2:
+                            game.tankSpecs[t->type].maxBulletCount = 2;
+                            break;
+                        case 3:
+                            break;
+                    }
                     break;
-                case 3:
+                case PUGrenade:
+                    destroyAllTanks();
                     break;
-                }
-                break;
-            case PUGrenade:
-                destroyAllTanks();
-                break;
-            case PUTimer:
-                game.timerPowerUpTimeLeft = TIMER_TIME;
-                break;
-            case PUShield:
-                t->shieldTimeLeft = SHIELD_TIME;
-                break;
-            case PUShovel:
-                game.shovelPowerUpTimeLeft = SHOVEL_TIME;
-                for (int i = 0; i < ASIZE(fortressWall); i++) {
-                    game.field[fortressWall[i].row][fortressWall[i].col].type =
-                        CTConcrete;
-                    game.field[fortressWall[i].row][fortressWall[i].col]
-                        .texRow = fortressWall[i].row % 2;
-                    game.field[fortressWall[i].row][fortressWall[i].col]
-                        .texCol = fortressWall[i].col % 2;
-                }
-                break;
-            case PUMax:
-                break;
+                case PUTimer:
+                    game.timerPowerUpTimeLeft = TIMER_TIME;
+                    break;
+                case PUShield:
+                    t->shieldTimeLeft = SHIELD_TIME;
+                    break;
+                case PUShovel:
+                    game.shovelPowerUpTimeLeft = SHOVEL_TIME;
+                    for (int i = 0; i < ASIZE(fortressWall); i++) {
+                        game.field[fortressWall[i].row][fortressWall[i].col]
+                            .type = CTConcrete;
+                        game.field[fortressWall[i].row][fortressWall[i].col]
+                            .texRow = fortressWall[i].row % 2;
+                        game.field[fortressWall[i].row][fortressWall[i].col]
+                            .texCol = fortressWall[i].col % 2;
+                    }
+                    break;
+                case PUMax:
+                    break;
             }
             return;
         }
@@ -1395,13 +1380,11 @@ static void handlePowerUpHit(Tank *t) {
 }
 
 static void handleCommand(Tank *t, Command cmd) {
-    if (t->status != TSActive)
-        return;
+    if (t->status != TSActive) return;
     if (cmd.fire) {
         fireBullet(t);
     }
-    if (t->immobileTimeLeft > 0)
-        return;
+    if (t->immobileTimeLeft > 0) return;
     if (t->slidingTimeLeft > 0) {
         if (!cmd.move) {
             cmd.move = true;
@@ -1411,26 +1394,25 @@ static void handleCommand(Tank *t, Command cmd) {
         }
     }
     t->isMoving = cmd.move;
-    if (!cmd.move)
-        return;
+    if (!cmd.move) return;
     t->texColOffset = (t->texColOffset + 1) % 2;
     Vector2 prevPos = t->pos;
     bool isAlreadyCollided = checkTankToTankCollision(t);
     if (t->direction == cmd.direction) {
         int delta = game.frameTime * game.tankSpecs[t->type].speed;
         switch (t->direction) {
-        case DLeft:
-            t->pos.x -= delta;
-            break;
-        case DRight:
-            t->pos.x += delta;
-            break;
-        case DUp:
-            t->pos.y -= delta;
-            break;
-        case DDown:
-            t->pos.y += delta;
-            break;
+            case DLeft:
+                t->pos.x -= delta;
+                break;
+            case DRight:
+                t->pos.x += delta;
+                break;
+            case DUp:
+                t->pos.y -= delta;
+                break;
+            case DDown:
+                t->pos.y += delta;
+                break;
         }
     } else if (((t->direction == DRight && cmd.direction == DLeft) ||
                 (t->direction == DLeft && cmd.direction == DRight)) ||
@@ -1440,14 +1422,14 @@ static void handleCommand(Tank *t, Command cmd) {
         return;
     } else {
         switch (t->direction) {
-        case DLeft:
-        case DRight:
-            t->pos.x = snap((int)t->pos.x);
-            break;
-        case DUp:
-        case DDown:
-            t->pos.y = snap((int)t->pos.y);
-            break;
+            case DLeft:
+            case DRight:
+                t->pos.x = snap((int)t->pos.x);
+                break;
+            case DUp:
+            case DDown:
+                t->pos.y = snap((int)t->pos.y);
+                break;
         }
     }
     handlePowerUpHit(t);
@@ -1482,12 +1464,10 @@ static void handleTankAI(Tank *t) {
 }
 
 static void handleAI() {
-    if (game.timerPowerUpTimeLeft > 0)
-        return;
+    if (game.timerPowerUpTimeLeft > 0) return;
     for (int i = 2; i < MAX_TANK_COUNT; i++) {
         Tank *t = &game.tanks[i];
-        if (t->status != TSActive)
-            continue;
+        if (t->status != TSActive) continue;
         handleTankAI(t);
     }
 }
@@ -1533,13 +1513,11 @@ static void setScreen(GameScreen s) {
 }
 
 static void handleInput() {
-
     if (game.gameOverTime > 0 && IsKeyPressed(KEY_ENTER)) {
         setScreen(GSScore);
         return;
     }
-    if (game.gameOverTime > 0)
-        return;
+    if (game.gameOverTime > 0) return;
     handlePlayerInput(TPlayer1);
     if (game.mode == GMTwoPlayers) {
         handlePlayerInput(TPlayer2);
@@ -1559,31 +1537,31 @@ static void destroyBullet(Bullet *b, bool explosion) {
 static void destroyBrick(int row, int col, bool destroyConcrete,
                          bool playSound) {
     switch (game.field[row][col].type) {
-    case CTBorder:
-        if (playSound) {
-            PlaySound(game.sounds.bullet_hit_1);
-        }
-        break;
-    case CTBrick:
-        game.field[row][col].type = CTBlank;
-        if (playSound) {
-            PlaySound(game.sounds.bullet_hit_2);
-        }
-        break;
-    case CTConcrete:
-        if (destroyConcrete) {
+        case CTBorder:
+            if (playSound) {
+                PlaySound(game.sounds.bullet_hit_1);
+            }
+            break;
+        case CTBrick:
             game.field[row][col].type = CTBlank;
             if (playSound) {
                 PlaySound(game.sounds.bullet_hit_2);
             }
-        } else {
-            if (playSound) {
-                PlaySound(game.sounds.bullet_hit_1);
+            break;
+        case CTConcrete:
+            if (destroyConcrete) {
+                game.field[row][col].type = CTBlank;
+                if (playSound) {
+                    PlaySound(game.sounds.bullet_hit_2);
+                }
+            } else {
+                if (playSound) {
+                    PlaySound(game.sounds.bullet_hit_1);
+                }
             }
-        }
-        break;
-    default:
-        break;
+            break;
+        default:
+            break;
     }
 }
 
@@ -1626,10 +1604,8 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
 static void gameOver() { game.gameOverTime = 0.001; }
 
 static void handlePlayerKill(Tank *t) {
-    if (game.gameOverTime > 0)
-        return;
-    if (isEnemy(t))
-        return;
+    if (game.gameOverTime > 0) return;
+    if (isEnemy(t)) return;
     if (t->lifes < 0) {
         gameOver();
         return;
@@ -1661,8 +1637,7 @@ static void checkBulletHit(Bullet *b) {
             continue;
         }
         destroyBullet(b, true);
-        if (t->shieldTimeLeft > 0)
-            break;
+        if (t->shieldTimeLeft > 0) break;
         if (!isEnemy(b->tank) && !isEnemy(t)) {
             t->immobileTimeLeft = IMMOBILE_TIME;
             break;
@@ -1691,8 +1666,7 @@ static void checkBulletHit(Bullet *b) {
 static bool checkBulletToBulletCollision(Bullet *b) {
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b2 = &game.bullets[i];
-        if (b == b2 || b2->type == BTNone)
-            continue;
+        if (b == b2 || b2->type == BTNone) continue;
         if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, b2->pos.x,
                       b2->pos.y, BULLET_SIZE, BULLET_SIZE)) {
             destroyBullet(b, false);
@@ -1725,46 +1699,44 @@ static void checkBulletCollision(Bullet *b) {
         gameOver();
         return;
     }
-    if (checkBulletToBulletCollision(b))
-        return;
+    if (checkBulletToBulletCollision(b)) return;
     checkBulletHit(b);
     switch (b->direction) {
-    case DRight: {
-        int startRow = ((int)b->pos.y) / CELL_SIZE;
-        int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
-        int col = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
-        checkBulletRows(b, startRow, endRow, col, col + 1);
-        return;
-    }
-    case DLeft: {
-        int startRow = ((int)b->pos.y) / CELL_SIZE;
-        int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
-        int col = ((int)b->pos.x) / CELL_SIZE;
-        checkBulletRows(b, startRow, endRow, col, col - 1);
-        return;
-    }
-    case DUp: {
-        int startCol = ((int)b->pos.x) / CELL_SIZE;
-        int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
-        int row = ((int)(b->pos.y)) / CELL_SIZE;
-        checkBulletCols(b, startCol, endCol, row, row - 1);
-        return;
-    }
-    case DDown: {
-        int startCol = ((int)b->pos.x) / CELL_SIZE;
-        int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
-        int row = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
-        checkBulletCols(b, startCol, endCol, row, row + 1);
-        return;
-    }
+        case DRight: {
+            int startRow = ((int)b->pos.y) / CELL_SIZE;
+            int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
+            int col = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
+            checkBulletRows(b, startRow, endRow, col, col + 1);
+            return;
+        }
+        case DLeft: {
+            int startRow = ((int)b->pos.y) / CELL_SIZE;
+            int endRow = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
+            int col = ((int)b->pos.x) / CELL_SIZE;
+            checkBulletRows(b, startRow, endRow, col, col - 1);
+            return;
+        }
+        case DUp: {
+            int startCol = ((int)b->pos.x) / CELL_SIZE;
+            int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
+            int row = ((int)(b->pos.y)) / CELL_SIZE;
+            checkBulletCols(b, startCol, endCol, row, row - 1);
+            return;
+        }
+        case DDown: {
+            int startCol = ((int)b->pos.x) / CELL_SIZE;
+            int endCol = ((int)b->pos.x + BULLET_SIZE - 1) / CELL_SIZE;
+            int row = ((int)b->pos.y + BULLET_SIZE - 1) / CELL_SIZE;
+            checkBulletCols(b, startCol, endCol, row, row + 1);
+            return;
+        }
     }
 }
 
 static void updateBulletsState() {
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
-        if (b->type == BTNone)
-            continue;
+        if (b->type == BTNone) continue;
         b->pos.x += (b->speed.x * game.frameTime);
         b->pos.y += (b->speed.y * game.frameTime);
         checkBulletCollision(b);
@@ -2017,16 +1989,16 @@ static void titleLogic() {
             game.title.menuSelecteItem % (MMax - 1) + 1;
     } else if (IsKeyPressed(KEY_ENTER)) {
         switch (game.title.menuSelecteItem) {
-        case MOnePlayer:
-            game.mode = GMOnePlayer;
-            break;
-        case MTwoPlayers:
-            game.mode = GMTwoPlayers;
-            break;
-        default:
-            game.title.time = TITLE_SLIDE_TIME;
-            return;
-            ;
+            case MOnePlayer:
+                game.mode = GMOnePlayer;
+                break;
+            case MTwoPlayers:
+                game.mode = GMTwoPlayers;
+                break;
+            default:
+                game.title.time = TITLE_SLIDE_TIME;
+                return;
+                ;
         }
         game.title = (Title){0};
         setScreen(GSPlay);
@@ -2078,16 +2050,14 @@ static void gameLogic() {
     if (game.stageCurtainTime && game.stageCurtainTime < STAGE_CURTAIN_TIME) {
         game.stageCurtainTime += game.frameTime;
     }
-    if (game.stageCurtainTime < STAGE_CURTAIN_TIME)
-        return;
+    if (game.stageCurtainTime < STAGE_CURTAIN_TIME) return;
     if (IsKeyPressed(KEY_ENTER)) {
         game.isPaused = !game.isPaused;
         if (game.isPaused) {
             PlaySound(game.sounds.game_pause);
         }
     }
-    if (game.isPaused)
-        return;
+    if (game.isPaused) return;
     if (game.gameOverTime &&
         game.gameOverTime < GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
         game.gameOverTime += game.frameTime;
@@ -2129,7 +2099,7 @@ static void gameLogic() {
 }
 
 static void saveHiScore() {
-    char bytes[4];
+    u8 bytes[4];
     bytes[0] = game.hiScore & 0xFF;
     bytes[1] = (game.hiScore >> 8) & 0xFF;
     bytes[2] = (game.hiScore >> 16) & 0xFF;
@@ -2141,9 +2111,9 @@ static void saveHiScore() {
 #ifdef ALT_ASSETS
 static void playMusic() {
     static bool isFirstTime = true;
-#define currentSoundtrack                                                      \
+#define currentSoundtrack \
     (game.sounds.soundtrack[game.soundtrack * 4 + game.soundtrackPhase])
-#define dieSoundtrack                                                          \
+#define dieSoundtrack \
     (game.sounds.soundtrack[ASIZE(game.sounds.soundtrack) - 1])
     if (isFirstTime) {
         isFirstTime = false;
@@ -2151,8 +2121,7 @@ static void playMusic() {
         return;
     }
     if (game.gameOverTime) {
-        if (IsSoundPlaying(dieSoundtrack))
-            return;
+        if (IsSoundPlaying(dieSoundtrack)) return;
         if (!game.isDieSoundtrackPlayed) {
             StopSound(currentSoundtrack);
             PlaySound(dieSoundtrack);
@@ -2174,7 +2143,6 @@ static void playMusic() {
 #endif
 
 int main(void) {
-
     srand(time(0));
 
     SetTraceLogLevel(LOG_NONE);
