@@ -63,6 +63,7 @@ const CellInfo fortressWall[] = {
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
 const int FONT_SIZE = 40;
+const int SMALL_FONT_SIZE = 27;
 const float TITLE_SLIDE_TIME = 1;
 const float IMMOBILE_TIME = 5;
 const float GAME_OVER_SLIDE_TIME = 1;
@@ -100,7 +101,8 @@ const int PLAYER_SPEED = 220;
 const short ENEMY_SPEEDS[3] = {140, 170, 240};
 const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
-const int MAX_BULLET_COUNT = 100;
+const int MAX_BULLET_COUNT = 200;
+const int BULLET_COUNT = 100;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
 const int MAX_SCORE_POPUP_COUNT = MAX_BULLET_COUNT;
 const Vector2 SCORE_POPUP_TEXTURE_SIZE = (Vector2){16, 9};
@@ -220,6 +222,7 @@ typedef struct {
     float shieldTimeLeft;
     float immobileTimeLeft;
     float slidingTimeLeft;
+    int bulletCount;
 } Tank;
 
 typedef struct {
@@ -591,9 +594,21 @@ static Rectangle digitTextureRect(char digit) {
     return (Rectangle){(digit % 5) * w, (digit / 5) * w, w, w};
 }
 
+static void drawBulletCounts() {
+    char text[20];
+    static Color color = RED;
+    snprintf(text, 20, "%3d", game.tanks[0].bulletCount);
+    drawText(text, (14 * 4 + 2) * CELL_SIZE + 8, ((8 * 4 + 2) * CELL_SIZE),
+             SMALL_FONT_SIZE, color);
+    snprintf(text, 20, "%3d", game.tanks[1].bulletCount);
+    drawText(text, (14 * 4 + 2) * CELL_SIZE + 8, ((9 * 4 + 4) * CELL_SIZE),
+             SMALL_FONT_SIZE, color);
+}
+
 static void drawUI() {
     drawUITanks();
     drawUIElements();
+    drawBulletCounts();
 }
 
 static void drawPowerUp(PowerUp *p) {
@@ -914,6 +929,7 @@ static void spawnPlayer(Tank *t, bool resetTier) {
     t->immobileTimeLeft = 0;
     t->firedBulletCount = 0;
     t->isMoving = false;
+    t->bulletCount = BULLET_COUNT;
     if (resetTier) {
         t->tier = 0;
         game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[0];
@@ -988,6 +1004,7 @@ static void initStage(char stage) {
         TankType type = levelTanks[stage - 1][i];
         game.tanks[i + 2] = (Tank){
             .type = type,
+            .bulletCount = 99999,
             .pos = (Vector2){CELL_SIZE * startingCols[i % 3], CELL_SIZE * 2},
             .direction = DDown,
             .status = TSPending,
@@ -1028,8 +1045,10 @@ static void loadHiScore() {
 static void initGameRun() {
     saveHiScore();
     game.isFlagDead = false;
-    game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
-    game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
+    game.tanks[TPlayer1] =
+        (Tank){.type = TPlayer1, .lifes = 2, .bulletCount = BULLET_COUNT};
+    game.tanks[TPlayer2] =
+        (Tank){.type = TPlayer2, .lifes = 2, .bulletCount = BULLET_COUNT};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
@@ -1114,8 +1133,12 @@ static void initGame() {
 }
 
 static void fireBullet(Tank *t) {
-    if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount) return;
+    if (t->bulletCount == 0) return;
+    if (isEnemy(t) &&
+        t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount)
+        return;
     t->firedBulletCount++;
+    t->bulletCount--;
     if (!isEnemy(t)) {
         PlaySound(game.sounds.player_fire);
     }
