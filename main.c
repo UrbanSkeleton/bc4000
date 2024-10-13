@@ -1033,7 +1033,14 @@ static void initStage(char stage) {
 }
 
 static void loadHiScore() {
-    Buffer b = readFile("hiscore");
+    const char *filename = "hiscore";
+    FILE *f = fopen(filename, "rb");
+    if (!f) {
+        game.hiScore = 0;
+        return;
+    }
+    fclose(f);
+    Buffer b = readFile(filename);
     if (b.size < 4) {
         fprintf(stderr, "Cannot read hiscore");
         exit(1);
