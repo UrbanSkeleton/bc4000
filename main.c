@@ -76,8 +76,14 @@ const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
 const int STAGE_COUNT = 16;
-const int FIELD_COLS = 64;
-const int FIELD_ROWS = 56;
+const int PLAYGROUND_COLS = 4 * 13 * 2;
+const int PLAYGROUND_ROWS = 4 * 13;
+const int LEFT_EDGE_COLS = 4;
+const int RIGHT_EDGE_COLS = 4 * 2;
+const int TOP_EDGE_ROWS = 2;
+const int BOTTOM_EDGE_ROWS = 2;
+const int FIELD_COLS = PLAYGROUND_COLS + LEFT_EDGE_COLS + RIGHT_EDGE_COLS;
+const int FIELD_ROWS = PLAYGROUND_ROWS + TOP_EDGE_ROWS + BOTTOM_EDGE_ROWS;
 const int CELL_SIZE = 16;
 const int SCREEN_WIDTH = FIELD_COLS * CELL_SIZE;
 const int SCREEN_HEIGHT = FIELD_ROWS * CELL_SIZE;
@@ -90,12 +96,13 @@ const int POWER_UP_SIZE = CELL_SIZE * 4;
 const int SPAWN_TEXTURE_SIZE = 32;
 const int UI_TANK_TEXTURE_SIZE = 14;
 const int UI_TANK_SIZE = CELL_SIZE * 2;
-const int PLAYER1_START_COL = 4 * 4 + 4;
 const int PLAYER2_START_COL = 4 * 8 + 4;
-const Vector2 PLAYER1_START_POS = {CELL_SIZE * PLAYER1_START_COL,
-                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
-const Vector2 PLAYER2_START_POS = {CELL_SIZE * PLAYER2_START_COL,
-                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
+const Vector2 PLAYER1_START_POS = {
+    CELL_SIZE * LEFT_EDGE_COLS,
+    CELL_SIZE *(TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2 - 6)};
+const Vector2 PLAYER2_START_POS = {
+    CELL_SIZE * (LEFT_EDGE_COLS + PLAYGROUND_COLS - 4),
+    CELL_SIZE *(TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2 - 6)};
 const int PLAYER_SPEED = 220;
 const short ENEMY_SPEEDS[3] = {140, 170, 240};
 const int MAX_ENEMY_COUNT = 20;
@@ -564,9 +571,12 @@ static void drawUITanks() {
     for (int i = 0; i < game.pendingEnemyCount; i++) {
         DrawTexturePro(
             *tex, (Rectangle){0, 0, UI_TANK_TEXTURE_SIZE, UI_TANK_TEXTURE_SIZE},
-            (Rectangle){(14 * 4 + 2 + 2 * (i % 2)) * CELL_SIZE + drawOffset,
-                        ((2 + 2) + (i / 2 * 2)) * CELL_SIZE + drawOffset,
-                        drawSize, drawSize},
+            (Rectangle){
+                (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2 + 2 * (i % 2)) *
+                        CELL_SIZE +
+                    drawOffset,
+                ((TOP_EDGE_ROWS + 2) + (i / 2 * 2)) * CELL_SIZE + drawOffset,
+                drawSize, drawSize},
             (Vector2){}, 0, WHITE);
     }
 }
@@ -777,7 +787,7 @@ static void loadTextures() {
 
 static void loadStage(int stage) {
     char filename[50];
-    snprintf(filename, 50, "levels/stage%.2d", stage);
+    snprintf(filename, 50, "levels/stage%.2d.new", stage);
     Buffer buf = readFile(filename);
     int ci = 0;
     for (int i = 0; i < FIELD_ROWS; i++) {
@@ -806,30 +816,30 @@ static void initUIElements() {
                                               game.textures.uiFlag.height},
                     .pos =
                         (Vector2){
-                            (14 * 4 + 2) * CELL_SIZE,
+                            (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE,
                             (11 * 4 * CELL_SIZE),
                         },
                     .size = (Vector2){CELL_SIZE * 4, CELL_SIZE * 4},
                     .drawSize = (Vector2){game.textures.uiFlag.width * 2,
                                           game.textures.uiFlag.height * 2}};
-    game.uiElements[UIPlayer1] =
-        (UIElement){.isVisible = true,
-                    .texture = &game.textures.ui,
-                    .textureSrc = (Rectangle){28, 0, 28, 14},
-                    .pos =
-                        (Vector2){
-                            (14 * 4 + 2) * CELL_SIZE + 8,
-                            ((7 * 4 + 2) * CELL_SIZE),
-                        },
-                    .size = (Vector2){14 * 4, 14 * 2},
-                    .drawSize = (Vector2){14 * 4, 14 * 2}};
+    game.uiElements[UIPlayer1] = (UIElement){
+        .isVisible = true,
+        .texture = &game.textures.ui,
+        .textureSrc = (Rectangle){28, 0, 28, 14},
+        .pos =
+            (Vector2){
+                (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE + 8,
+                ((7 * 4 + 2) * CELL_SIZE),
+            },
+        .size = (Vector2){14 * 4, 14 * 2},
+        .drawSize = (Vector2){14 * 4, 14 * 2}};
     game.uiElements[UIP1Tank] =
         (UIElement){.isVisible = true,
                     .texture = &game.textures.ui,
                     .textureSrc = (Rectangle){14, 0, 14, 14},
                     .pos =
                         (Vector2){
-                            (14 * 4 + 2) * CELL_SIZE,
+                            (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE,
                             ((8 * 4) * CELL_SIZE),
                         },
                     .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
@@ -840,7 +850,7 @@ static void initUIElements() {
                     .textureSrc = digitTextureRect(game.tanks[0].lifes),
                     .pos =
                         (Vector2){
-                            (15 * 4) * CELL_SIZE,
+                            (LEFT_EDGE_COLS + PLAYGROUND_COLS + 4) * CELL_SIZE,
                             ((8 * 4) * CELL_SIZE),
                         },
                     .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
@@ -851,8 +861,8 @@ static void initUIElements() {
                     .textureSrc = digitTextureRect(game.stage % 10),
                     .pos =
                         (Vector2){
-                            (16 * 4 - 4) * CELL_SIZE,
-                            (14 * 4 - 8) * CELL_SIZE,
+                            (FIELD_COLS - 4) * CELL_SIZE,
+                            (FIELD_ROWS - 8) * CELL_SIZE,
                         },
                     .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                     .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
@@ -863,52 +873,52 @@ static void initUIElements() {
                         .textureSrc = digitTextureRect(game.stage / 10),
                         .pos =
                             (Vector2){
-                                (16 * 4 - 6) * CELL_SIZE,
-                                (14 * 4 - 8) * CELL_SIZE,
+                                (FIELD_COLS - 6) * CELL_SIZE,
+                                (FIELD_ROWS - 8) * CELL_SIZE,
                             },
                         .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                         .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
     }
     if (game.mode == GMTwoPlayers) {
-        game.uiElements[UIPlayer2] =
-            (UIElement){.isVisible = true,
-                        .texture = &game.textures.ui,
-                        .textureSrc = (Rectangle){56, 0, 28, 14},
-                        .pos =
-                            (Vector2){
-                                (14 * 4 + 2) * CELL_SIZE + 8,
-                                ((9 * 4) * CELL_SIZE),
-                            },
-                        .size = (Vector2){14 * 4, 14 * 2},
-                        .drawSize = (Vector2){14 * 4, 14 * 2}};
-        game.uiElements[UIP2Tank] =
-            (UIElement){.isVisible = true,
-                        .texture = &game.textures.ui,
-                        .textureSrc = (Rectangle){14, 0, 14, 14},
-                        .pos =
-                            (Vector2){
-                                (14 * 4 + 2) * CELL_SIZE,
-                                ((9 * 4 + 2) * CELL_SIZE),
-                            },
-                        .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
-                        .drawSize = (Vector2){14 * 2, 14 * 2}};
-        game.uiElements[UIP2Lifes] =
-            (UIElement){.isVisible = true,
-                        .texture = &game.textures.digits,
-                        .textureSrc = digitTextureRect(game.tanks[1].lifes),
-                        .pos =
-                            (Vector2){
-                                (15 * 4) * CELL_SIZE,
-                                ((9 * 4 + 2) * CELL_SIZE),
-                            },
-                        .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
-                        .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
+        game.uiElements[UIPlayer2] = (UIElement){
+            .isVisible = true,
+            .texture = &game.textures.ui,
+            .textureSrc = (Rectangle){56, 0, 28, 14},
+            .pos =
+                (Vector2){
+                    (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE + 8,
+                    ((9 * 4) * CELL_SIZE),
+                },
+            .size = (Vector2){14 * 4, 14 * 2},
+            .drawSize = (Vector2){14 * 4, 14 * 2}};
+        game.uiElements[UIP2Tank] = (UIElement){
+            .isVisible = true,
+            .texture = &game.textures.ui,
+            .textureSrc = (Rectangle){14, 0, 14, 14},
+            .pos =
+                (Vector2){
+                    (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE,
+                    ((9 * 4 + 2) * CELL_SIZE),
+                },
+            .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
+            .drawSize = (Vector2){14 * 2, 14 * 2}};
+        game.uiElements[UIP2Lifes] = (UIElement){
+            .isVisible = true,
+            .texture = &game.textures.digits,
+            .textureSrc = digitTextureRect(game.tanks[1].lifes),
+            .pos =
+                (Vector2){
+                    (LEFT_EDGE_COLS + PLAYGROUND_COLS + 4) * CELL_SIZE,
+                    ((9 * 4 + 2) * CELL_SIZE),
+                },
+            .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
+            .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
     }
 }
 
 static void spawnPlayer(Tank *t, bool resetTier) {
     t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
-    t->direction = DUp;
+    t->direction = t->type == TPlayer1 ? DRight : DLeft;
     t->status = TSSpawning;
     t->shieldTimeLeft = 4;
     t->immobileTimeLeft = 0;
@@ -1064,8 +1074,9 @@ static void initGame() {
         (Animation){.duration = BIG_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bigExplosions),
                     .textures = &game.textures.bigExplosions[0]};
-    game.flagPos = (Vector2){CELL_SIZE * ((FIELD_COLS - 12) / 2 - 2 + 4),
-                             CELL_SIZE * (FIELD_ROWS - 4 - 2)};
+    game.flagPos =
+        (Vector2){CELL_SIZE * LEFT_EDGE_COLS,
+                  CELL_SIZE * (TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2)};
     game.tankSpecs[TBasic] =
         (TankSpec){.texture = &game.textures.enemies,
                    .powerUpTexture = &game.textures.enemiesWithPowerUps,
@@ -2178,8 +2189,8 @@ int main(void) {
         game.draw();
         EndTextureMode();
         BeginDrawing();
-        int sh = GetScreenHeight();
-        int sw = sh * ((float)SCREEN_WIDTH / SCREEN_HEIGHT);
+        int sw = GetScreenWidth();
+        int sh = sw * ((float)SCREEN_HEIGHT / SCREEN_WIDTH);
         DrawTexturePro(renderTexture.texture,
                        (Rectangle){0, 0, SCREEN_WIDTH, -SCREEN_HEIGHT},
                        (Rectangle){(GetScreenWidth() - sw) / 2, 0, sw, sh},
