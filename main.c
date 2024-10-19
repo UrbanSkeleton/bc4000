@@ -60,6 +60,7 @@ const CellInfo fortressWall[] = {
     {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
 };
 
+const int FLAG_COUNT = 2;
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
 const int FONT_SIZE = 40;
@@ -367,12 +368,16 @@ static GameFunctions gameFunctions[] = {
 };
 
 typedef struct {
+    Vector2 pos;
+    bool isDead;
+} Flag;
+
+typedef struct {
     Cell field[FIELD_ROWS][FIELD_COLS];
     Tank tanks[MAX_TANK_COUNT];
     TankSpec tankSpecs[TMax];
     Bullet bullets[MAX_BULLET_COUNT];
-    Vector2 flagPos;
-    bool isFlagDead;
+    Flag flags[FLAG_COUNT];
     CellSpec cellSpecs[CTMax];
     PowerUpSpec powerUpSpecs[PUMax];
     Animation explosionAnimations[ETMax];
@@ -517,13 +522,15 @@ static void drawTanks() {
     }
 }
 
-static void drawFlag() {
-    Texture2D *tex =
-        game.isFlagDead ? &game.textures.deadFlag : &game.textures.flag;
-    DrawTexturePro(
-        *tex, (Rectangle){0, 0, tex->width, tex->height},
-        (Rectangle){game.flagPos.x, game.flagPos.y, FLAG_SIZE, FLAG_SIZE},
-        (Vector2){}, 0, WHITE);
+static void drawFlags() {
+    for (int i = 0; i < FLAG_COUNT; i++) {
+        Texture2D *tex = game.flags[i].isDead ? &game.textures.deadFlag
+                                              : &game.textures.flag;
+        DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
+                       (Rectangle){game.flags[i].pos.x, game.flags[i].pos.y,
+                                   FLAG_SIZE, FLAG_SIZE},
+                       (Vector2){}, 0, WHITE);
+    }
 }
 
 static void drawBullets() {
@@ -686,7 +693,7 @@ static void drawGame() {
     drawField();
     drawBullets();
     drawTanks();
-    drawFlag();
+    drawFlags();
     drawForest();
     drawExplosions();
     drawScorePopups();
@@ -999,13 +1006,16 @@ static void initStage(char stage) {
     if (game.mode == GMTwoPlayers) {
         spawnPlayer(&game.tanks[TPlayer2], false);
     }
-    static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
-                                   FIELD_COLS - 8 - 4};
+    static char startingRows[3] = {TOP_EDGE_ROWS,
+                                   TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2,
+                                   TOP_EDGE_ROWS + PLAYGROUND_ROWS - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
         TankType type = levelTanks[stage - 1][i];
         game.tanks[i + 2] = (Tank){
             .type = type,
-            .pos = (Vector2){CELL_SIZE * startingCols[i % 3], CELL_SIZE * 2},
+            .pos = (Vector2){CELL_SIZE * (LEFT_EDGE_COLS +
+                                          (PLAYGROUND_COLS / 2) - 4 * (i % 2)),
+                             CELL_SIZE * startingRows[i % 3]},
             .direction = DDown,
             .status = TSPending,
             .isMoving = true,
@@ -1051,7 +1061,7 @@ static void loadHiScore() {
 
 static void initGameRun() {
     saveHiScore();
-    game.isFlagDead = false;
+    for (int i = 0; i < FLAG_COUNT; i++) game.flags[i].isDead = false;
     game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
     game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
@@ -1081,8 +1091,11 @@ static void initGame() {
         (Animation){.duration = BIG_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bigExplosions),
                     .textures = &game.textures.bigExplosions[0]};
-    game.flagPos =
+    game.flags[0].pos =
         (Vector2){CELL_SIZE * LEFT_EDGE_COLS,
+                  CELL_SIZE * (TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2)};
+    game.flags[1].pos =
+        (Vector2){CELL_SIZE * (LEFT_EDGE_COLS + PLAYGROUND_COLS - 4),
                   CELL_SIZE * (TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2)};
     game.tankSpecs[TBasic] =
         (TankSpec){.texture = &game.textures.enemies,
@@ -1181,8 +1194,13 @@ static void fireBullet(Tank *t) {
 }
 
 static bool checkTankToFlagCollision(Tank *t) {
-    return collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE, game.flagPos.x,
-                     game.flagPos.y, FLAG_SIZE, FLAG_SIZE);
+    for (int i = 0; i < FLAG_COUNT; i++) {
+        bool c = collision(t->pos.x, t->pos.y, TANK_SIZE, TANK_SIZE,
+                           game.flags[i].pos.x, game.flags[i].pos.y, FLAG_SIZE,
+                           FLAG_SIZE);
+        if (c) return c;
+    }
+    return false;
 }
 
 static bool checkTankToTankCollision(Tank *t) {
@@ -1702,19 +1720,22 @@ static bool checkBulletToBulletCollision(Bullet *b) {
     return false;
 }
 
-static void destroyFlag() {
-    createExplosion(ETBig, game.flagPos, FLAG_SIZE, -1);
-    game.isFlagDead = true;
+static void destroyFlag(int i) {
+    createExplosion(ETBig, game.flags[i].pos, FLAG_SIZE, -1);
+    game.flags[i].isDead = true;
 }
 
 static bool checkFlagHit(Bullet *b) {
-    if (!game.gameOverTime &&
-        collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE, game.flagPos.x,
-                  game.flagPos.y, FLAG_SIZE, FLAG_SIZE)) {
-        destroyBullet(b, true);
-        destroyFlag();
-        PlaySound(game.sounds.big_explosion);
-        return true;
+    if (game.gameOverTime) return false;
+    for (int i = 0; i < FLAG_COUNT; i++) {
+        if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE,
+                      game.flags[i].pos.x, game.flags[i].pos.y, FLAG_SIZE,
+                      FLAG_SIZE)) {
+            destroyBullet(b, true);
+            destroyFlag(i);
+            PlaySound(game.sounds.big_explosion);
+            return true;
+        }
     }
     return false;
 }
