@@ -72,7 +72,7 @@ const float GAME_OVER_DELAY = 3;
 const float STAGE_CURTAIN_TIME = 2;
 const float STAGE_SUMMARY_SLIDE_TIME = 0.001;
 const float TIMER_TIME = 15.0;
-const float SHIELD_TIME = 15.0;
+const float SHIELD_TIME = 0.0;
 const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
@@ -121,6 +121,7 @@ const float BIG_EXPLOSION_TTL = 0.4f;
 const float ENEMY_SPAWN_INTERVAL = 3.0f;
 const float SPAWNING_TIME = 0.7f;
 const int POWERUP_POSITIONS_COUNT = 16;
+const int LIFE_COUNT = 127;
 const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
     {(4 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
     {(4 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
@@ -153,18 +154,7 @@ typedef enum {
 } TankType;
 typedef enum { TSPending, TSSpawning, TSActive, TSDead } TankStatus;
 typedef enum { DLeft, DRight, DUp, DDown } Direction;
-typedef enum {
-    UIFlag,
-    UIPlayer1,
-    UIPlayer2,
-    UIP1Tank,
-    UIP1Lifes,
-    UIP2Tank,
-    UIP2Lifes,
-    UIStageLowDigit,
-    UIStageHiDigit,
-    UIMax
-} UIElementType;
+typedef enum { UIFlag, UIStageLowDigit, UIStageHiDigit, UIMax } UIElementType;
 
 typedef struct {
     int totalScore;
@@ -339,11 +329,8 @@ typedef struct {
     Sound soundtrack[21];
 } Sounds;
 
-typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
-
 typedef struct {
     float time;
-    MenuSelectedItem menuSelecteItem;
 } Title;
 
 typedef struct {
@@ -401,7 +388,6 @@ typedef struct {
     void (*draw)();
     Title title;
     StageSummary stageSummary;
-    GameMode mode;
     float stageCurtainTime;
     float gameOverTime;
     float stageEndTime;
@@ -836,39 +822,6 @@ static void initUIElements() {
                     .size = (Vector2){CELL_SIZE * 4, CELL_SIZE * 4},
                     .drawSize = (Vector2){game.textures.uiFlag.width * 2,
                                           game.textures.uiFlag.height * 2}};
-    game.uiElements[UIPlayer1] = (UIElement){
-        .isVisible = true,
-        .texture = &game.textures.ui,
-        .textureSrc = (Rectangle){28, 0, 28, 14},
-        .pos =
-            (Vector2){
-                (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE + 8,
-                ((7 * 4 + 2) * CELL_SIZE),
-            },
-        .size = (Vector2){14 * 4, 14 * 2},
-        .drawSize = (Vector2){14 * 4, 14 * 2}};
-    game.uiElements[UIP1Tank] =
-        (UIElement){.isVisible = true,
-                    .texture = &game.textures.ui,
-                    .textureSrc = (Rectangle){14, 0, 14, 14},
-                    .pos =
-                        (Vector2){
-                            (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE,
-                            ((8 * 4) * CELL_SIZE),
-                        },
-                    .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
-                    .drawSize = (Vector2){14 * 2, 14 * 2}};
-    game.uiElements[UIP1Lifes] =
-        (UIElement){.isVisible = true,
-                    .texture = &game.textures.digits,
-                    .textureSrc = digitTextureRect(game.tanks[0].lifes),
-                    .pos =
-                        (Vector2){
-                            (LEFT_EDGE_COLS + PLAYGROUND_COLS + 4) * CELL_SIZE,
-                            ((8 * 4) * CELL_SIZE),
-                        },
-                    .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
-                    .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
     game.uiElements[UIStageLowDigit] =
         (UIElement){.isVisible = true,
                     .texture = &game.textures.digits,
@@ -892,41 +845,6 @@ static void initUIElements() {
                             },
                         .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                         .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
-    }
-    if (game.mode == GMTwoPlayers) {
-        game.uiElements[UIPlayer2] = (UIElement){
-            .isVisible = true,
-            .texture = &game.textures.ui,
-            .textureSrc = (Rectangle){56, 0, 28, 14},
-            .pos =
-                (Vector2){
-                    (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE + 8,
-                    ((9 * 4) * CELL_SIZE),
-                },
-            .size = (Vector2){14 * 4, 14 * 2},
-            .drawSize = (Vector2){14 * 4, 14 * 2}};
-        game.uiElements[UIP2Tank] = (UIElement){
-            .isVisible = true,
-            .texture = &game.textures.ui,
-            .textureSrc = (Rectangle){14, 0, 14, 14},
-            .pos =
-                (Vector2){
-                    (LEFT_EDGE_COLS + PLAYGROUND_COLS + 2) * CELL_SIZE,
-                    ((9 * 4 + 2) * CELL_SIZE),
-                },
-            .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
-            .drawSize = (Vector2){14 * 2, 14 * 2}};
-        game.uiElements[UIP2Lifes] = (UIElement){
-            .isVisible = true,
-            .texture = &game.textures.digits,
-            .textureSrc = digitTextureRect(game.tanks[1].lifes),
-            .pos =
-                (Vector2){
-                    (LEFT_EDGE_COLS + PLAYGROUND_COLS + 4) * CELL_SIZE,
-                    ((9 * 4 + 2) * CELL_SIZE),
-                },
-            .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
-            .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
     }
 }
 
@@ -1003,9 +921,8 @@ static void initStage(char stage) {
     }
     loadStage(game.stage);
     spawnPlayer(&game.tanks[TPlayer1], false);
-    if (game.mode == GMTwoPlayers) {
-        spawnPlayer(&game.tanks[TPlayer2], false);
-    }
+    spawnPlayer(&game.tanks[TPlayer2], false);
+
     static char startingRows[3] = {TOP_EDGE_ROWS,
                                    TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2,
                                    TOP_EDGE_ROWS + PLAYGROUND_ROWS - 4};
@@ -1062,8 +979,8 @@ static void loadHiScore() {
 static void initGameRun() {
     saveHiScore();
     for (int i = 0; i < FLAG_COUNT; i++) game.flags[i].isDead = false;
-    game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
-    game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
+    game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = LIFE_COUNT};
+    game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = LIFE_COUNT};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
@@ -1293,13 +1210,6 @@ static int snap(int x) {
     return (x - x1 < x2 - x) ? x1 : x2;
 }
 
-static void updatePlayerLifesUI() {
-    game.uiElements[UIP1Lifes].textureSrc =
-        digitTextureRect(game.tanks[0].lifes);
-    game.uiElements[UIP2Lifes].textureSrc =
-        digitTextureRect(game.tanks[1].lifes);
-}
-
 static void createScorePopup(int texCol, Vector2 targetPos, int targetSize) {
     Vector2 offset = {(SCORE_POPUP_SIZE.x - targetSize) / 2,
                       (SCORE_POPUP_SIZE.y - targetSize) / 2};
@@ -1376,7 +1286,6 @@ static void handlePowerUpHit(Tank *t) {
             switch (p->type) {
                 case PUTank:
                     t->lifes++;
-                    updatePlayerLifesUI();
                     break;
                 case PUStar:
                     if (t->tier == 3) return;
@@ -1562,9 +1471,7 @@ static void handleInput() {
     }
     if (game.gameOverTime > 0) return;
     handlePlayerInput(TPlayer1);
-    if (game.mode == GMTwoPlayers) {
-        handlePlayerInput(TPlayer2);
-    }
+    handlePlayerInput(TPlayer2);
 }
 
 static void destroyBullet(Bullet *b, bool explosion) {
@@ -1654,7 +1561,6 @@ static void handlePlayerKill(Tank *t) {
         return;
     }
     spawnPlayer(t, true);
-    updatePlayerLifesUI();
 }
 
 static void checkStageEnd() {
@@ -1681,10 +1587,6 @@ static void checkBulletHit(Bullet *b) {
         }
         destroyBullet(b, true);
         if (t->shieldTimeLeft > 0) break;
-        if (!isEnemy(b->tank) && !isEnemy(t)) {
-            t->immobileTimeLeft = IMMOBILE_TIME;
-            break;
-        }
         if (t->powerUp && t->powerUp->state == PUSPending) {
             t->powerUp->state = PUSActive;
             t->powerUp = NULL;
@@ -1954,16 +1856,15 @@ static void drawStageSummary() {
              topY + (FONT_SIZE + linePadding) * 2, FONT_SIZE,
              (Color){241, 159, 80, 255});
 
-    if (game.mode == GMTwoPlayers) {
-        int pX = (halfWidth - measureText("II-PLAYER", FONT_SIZE)) / 2;
-        drawText("II-PLAYER", halfWidth + pX, topY + FONT_SIZE + linePadding,
-                 FONT_SIZE, (Color){205, 62, 26, 255});
+    pX = (halfWidth - measureText("II-PLAYER", FONT_SIZE)) / 2;
+    drawText("II-PLAYER", halfWidth + pX, topY + FONT_SIZE + linePadding,
+             FONT_SIZE, (Color){205, 62, 26, 255});
 
-        // Player score
-        snprintf(text, N, "%d", game.playerScores[TPlayer2].totalScore);
-        drawText(text, (halfWidth + pX), topY + (FONT_SIZE + linePadding) * 2,
-                 FONT_SIZE, (Color){241, 159, 80, 255});
-    }
+    // Player score
+    snprintf(text, N, "%d", game.playerScores[TPlayer2].totalScore);
+    drawText(text, (halfWidth + pX), topY + (FONT_SIZE + linePadding) * 2,
+             FONT_SIZE, (Color){241, 159, 80, 255});
+
     int arrowWidth = game.textures.leftArrow.width;
     int arrowDrawWidth = arrowWidth * 4;
     int arrowHeight = game.textures.leftArrow.height;
@@ -1996,56 +1897,32 @@ static void drawStageSummary() {
                  kills);
         drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100, y,
                  FONT_SIZE, WHITE);
-        if (game.mode == GMTwoPlayers) {
-            DrawTexturePro(game.textures.rightArrow,
-                           (Rectangle){0, 0, arrowWidth, arrowHeight},
-                           (Rectangle){halfWidth + (drawSize / 2) + 10,
-                                       y - (arrowDrawHeight - FONT_SIZE) / 2,
-                                       arrowDrawWidth, arrowDrawHeight},
-                           (Vector2){}, 0, WHITE);
 
-            kills = game.playerScores[TPlayer2].kills[i];
-            player2TotalKills += kills;
-            snprintf(text, N, "%2d  %4d PTS", kills,
-                     kills * game.tankSpecs[i].points);
-            drawText(text, halfWidth + 100, y, FONT_SIZE, WHITE);
-        }
+        DrawTexturePro(game.textures.rightArrow,
+                       (Rectangle){0, 0, arrowWidth, arrowHeight},
+                       (Rectangle){halfWidth + (drawSize / 2) + 10,
+                                   y - (arrowDrawHeight - FONT_SIZE) / 2,
+                                   arrowDrawWidth, arrowDrawHeight},
+                       (Vector2){}, 0, WHITE);
+
+        kills = game.playerScores[TPlayer2].kills[i];
+        player2TotalKills += kills;
+        snprintf(text, N, "%2d  %4d PTS", kills,
+                 kills * game.tankSpecs[i].points);
+        drawText(text, halfWidth + 100, y, FONT_SIZE, WHITE);
     }
     snprintf(text, N, "TOTAL %2d", player1TotalKills);
     drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100,
              topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE, WHITE);
-    if (game.mode == GMTwoPlayers) {
-        snprintf(text, N, "%2d", player2TotalKills);
-        drawText(text, halfWidth + 100,
-                 topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE,
-                 WHITE);
-    }
+
+    snprintf(text, N, "%2d", player2TotalKills);
+    drawText(text, halfWidth + 100,
+             topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE, WHITE);
 }
 
 static void titleLogic() {
     game.title.time += game.frameTime;
-    if (game.title.time > TITLE_SLIDE_TIME &&
-        game.title.menuSelecteItem == MNone) {
-        game.title.menuSelecteItem = MOnePlayer;
-    }
-    if (IsKeyPressed(KEY_LEFT_SHIFT)) {
-        PlaySound(game.sounds.mode_switch);
-        game.title.time = TITLE_SLIDE_TIME;
-        game.title.menuSelecteItem =
-            game.title.menuSelecteItem % (MMax - 1) + 1;
-    } else if (IsKeyPressed(KEY_ENTER)) {
-        switch (game.title.menuSelecteItem) {
-            case MOnePlayer:
-                game.mode = GMOnePlayer;
-                break;
-            case MTwoPlayers:
-                game.mode = GMTwoPlayers;
-                break;
-            default:
-                game.title.time = TITLE_SLIDE_TIME;
-                return;
-                ;
-        }
+    if (IsKeyPressed(KEY_ENTER)) {
         game.title = (Title){0};
         setScreen(GSPlay);
         initGameRun();
@@ -2069,18 +1946,6 @@ static void drawTitle() {
     DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, titleTexHeight},
                    (Rectangle){x, y, tex->width * 2, titleTexHeight * 2},
                    (Vector2){}, 0, WHITE);
-    if (game.title.menuSelecteItem != MNone) {
-        tex = &game.textures.player1Tank;
-        int texX =
-            (3 * 2 + ((long)(game.totalTime * 16) % 2)) * TANK_TEXTURE_SIZE;
-        DrawTexturePro(
-            *tex, (Rectangle){texX, 0, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
-            (Rectangle){x + 150,
-                        topY + titleTexHeight * 2 - 110 +
-                            (game.title.menuSelecteItem - 1) * 60,
-                        TANK_TEXTURE_SIZE * 4, TANK_TEXTURE_SIZE * 4},
-            (Vector2){}, 0, WHITE);
-    }
 }
 
 static void gameLogic() {
