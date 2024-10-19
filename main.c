@@ -423,13 +423,16 @@ static int measureText(const char *text, int fontSize) {
 
 static bool isEnemy(Tank *t) { return game.tankSpecs[t->type].isEnemy; }
 
-static void drawCell(Cell *cell) {
+static void drawCell(Cell *cell, bool isLeftHalf) {
     Texture2D *tex = game.cellSpecs[cell->type].texture;
     int w = tex->width / 4;
     int h = tex->height / 4;
-    DrawTexturePro(*tex, (Rectangle){cell->texCol * w, cell->texRow * h, w, h},
+    int col = cell->texCol;
+    if (!isLeftHalf) col = 1 - col;
+    DrawTexturePro(*tex, (Rectangle){col * w, cell->texRow * h, w, h},
                    (Rectangle){cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE},
-                   (Vector2){}, 0, WHITE);
+                   (Vector2){CELL_SIZE / 2, CELL_SIZE / 2},
+                   isLeftHalf ? 90 : -90, WHITE);
 #ifdef DRAW_CELL_GRID
     DrawRectangleLines(cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE, BLUE);
 #endif
@@ -438,7 +441,9 @@ static void drawCell(Cell *cell) {
 static void drawField() {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            if (game.field[i][j].type != CTForest) drawCell(&game.field[i][j]);
+            if (game.field[i][j].type != CTForest)
+                drawCell(&game.field[i][j],
+                         j < LEFT_EDGE_COLS + PLAYGROUND_COLS / 2);
         }
     }
 }
@@ -446,7 +451,9 @@ static void drawField() {
 static void drawForest() {
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            if (game.field[i][j].type == CTForest) drawCell(&game.field[i][j]);
+            if (game.field[i][j].type == CTForest)
+                drawCell(&game.field[i][j],
+                         j < LEFT_EDGE_COLS + PLAYGROUND_COLS / 2);
         }
     }
 }
@@ -2193,7 +2200,7 @@ int main(void) {
         int sh = sw * ((float)SCREEN_HEIGHT / SCREEN_WIDTH);
         DrawTexturePro(renderTexture.texture,
                        (Rectangle){0, 0, SCREEN_WIDTH, -SCREEN_HEIGHT},
-                       (Rectangle){(GetScreenWidth() - sw) / 2, 0, sw, sh},
+                       (Rectangle){0, (GetScreenHeight() - sh) / 2, sw, sh},
                        (Vector2){0, 0}, 0, WHITE);
         EndDrawing();
         game.frameTime = GetFrameTime();
