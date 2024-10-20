@@ -7,7 +7,7 @@
 #include "utils.c"
 
 // #define DRAW_CELL_GRID
-// #define ALT_ASSETS
+#define ALT_ASSETS
 
 #ifdef ALT_ASSETS
 #define ASSETDIR "alt"
@@ -36,6 +36,7 @@ typedef struct {
     int col;
 } CellInfo;
 
+const int FLAG_LIFES = 100;
 const int FLAG_COUNT = 2;
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
@@ -57,7 +58,7 @@ const int PLAYGROUND_COLS = 4 * (13 * 2 + 1);
 const int PLAYGROUND_ROWS = 4 * 13;
 const int LEFT_EDGE_COLS = 4;
 const int RIGHT_EDGE_COLS = 4 * 2;
-const int TOP_EDGE_ROWS = 2;
+const int TOP_EDGE_ROWS = 4;
 const int BOTTOM_EDGE_ROWS = 2;
 const int FIELD_COLS = PLAYGROUND_COLS + LEFT_EDGE_COLS + RIGHT_EDGE_COLS;
 const int FIELD_ROWS = PLAYGROUND_ROWS + TOP_EDGE_ROWS + BOTTOM_EDGE_ROWS;
@@ -173,6 +174,7 @@ typedef struct {
     short points;
     char texRow;
     char lifes;
+    float respawnTime;
 } TankSpec;
 
 typedef enum {
@@ -207,7 +209,21 @@ typedef struct {
     float shieldTimeLeft;
     float immobileTimeLeft;
     float slidingTimeLeft;
+    char level;
 } Tank;
+
+static void levelUp1(Tank *t);
+static void levelUp2(Tank *t);
+static void levelUp3(Tank *t);
+static void levelUp4(Tank *t);
+
+typedef struct {
+    int score;
+    void (*levelUp)(Tank *t);
+} LevelUp;
+
+static LevelUp levelUps[] = {
+    {1000, levelUp1}, {3000, levelUp2}, {6000, levelUp3}, {10000, levelUp4}};
 
 typedef struct {
     bool fire;
@@ -345,7 +361,7 @@ static GameFunctions gameFunctions[] = {
 
 typedef struct {
     Vector2 pos;
-    bool isDead;
+    char lifes;
 } Flag;
 
 typedef struct {
@@ -390,6 +406,27 @@ typedef struct {
 } Game;
 
 static Game game;
+
+void levelUp1(Tank *t) {
+    t->tier = 1;
+    game.tankSpecs[t->type].texRow++;
+    game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[2];
+}
+
+void levelUp2(Tank *t) {
+    game.tankSpecs[t->type].respawnTime = PLAYWER_RESPAWN_TIME / 2;
+}
+
+void levelUp3(Tank *t) {
+    t->tier = 2;
+    game.tankSpecs[t->type].texRow++;
+    game.tankSpecs[t->type].maxBulletCount = 2;
+}
+
+void levelUp4(Tank *t) {
+    t->tier = 3;
+    game.tankSpecs[t->type].texRow++;
+}
 
 static void drawText(const char *text, int x, int y, int fontSize,
                      Color color) {
@@ -501,8 +538,8 @@ static void drawTanks() {
 
 static void drawFlags() {
     for (int i = 0; i < FLAG_COUNT; i++) {
-        Texture2D *tex = game.flags[i].isDead ? &game.textures.deadFlag
-                                              : &game.textures.flag;
+        Texture2D *tex = game.flags[i].lifes <= 0 ? &game.textures.deadFlag
+                                                  : &game.textures.flag;
         DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, tex->height},
                        (Rectangle){game.flags[i].pos.x, game.flags[i].pos.y,
                                    FLAG_SIZE, FLAG_SIZE},
@@ -592,9 +629,27 @@ static Rectangle digitTextureRect(char digit) {
     return (Rectangle){(digit % 5) * w, (digit / 5) * w, w, w};
 }
 
+static void drawTopUI() {
+    char text[50];
+    snprintf(text, 50, "Level: %d", game.tanks[0].level);
+    drawText(text, (LEFT_EDGE_COLS + 1) * CELL_SIZE, CELL_SIZE / 2,
+             FONT_SIZE / 2, WHITE);
+    snprintf(text, 50, "Lifes: %d", game.flags[0].lifes);
+    drawText(text, (LEFT_EDGE_COLS + 1) * CELL_SIZE, 2 * CELL_SIZE,
+             FONT_SIZE / 2, WHITE);
+
+    snprintf(text, 50, "Level: %d", game.tanks[1].level);
+    drawText(text, (LEFT_EDGE_COLS + PLAYGROUND_COLS - 16) * CELL_SIZE,
+             CELL_SIZE / 2, FONT_SIZE / 2, WHITE);
+    snprintf(text, 50, "Lifes: %d", game.flags[1].lifes);
+    drawText(text, (LEFT_EDGE_COLS + PLAYGROUND_COLS - 16) * CELL_SIZE,
+             2 * CELL_SIZE, FONT_SIZE / 2, WHITE);
+}
+
 static void drawUI() {
     drawUITanks();
     drawUIElements();
+    drawTopUI();
 }
 
 static void drawPowerUp(PowerUp *p) {
@@ -783,8 +838,8 @@ static void loadStage(int stage) {
     int ci = 0;
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
-            if (i <= 1 || i >= FIELD_ROWS - 2 || j <= 3 ||
-                j >= FIELD_COLS - 8) {
+            if (i < TOP_EDGE_ROWS || i >= FIELD_ROWS - BOTTOM_EDGE_ROWS ||
+                j < LEFT_EDGE_COLS || j >= FIELD_COLS - RIGHT_EDGE_COLS) {
                 game.field[i][j].type = CTBorder;
                 game.field[i][j].texRow = 0;
                 game.field[i][j].texCol = 0;
@@ -843,8 +898,8 @@ static void spawnPlayer(Tank *t, bool resetTier) {
     t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
     t->direction = t->type == TPlayer1 ? DRight : DLeft;
     t->status = TSSpawning;
-    t->spawningTime = resetTier ? PLAYWER_RESPAWN_TIME : SPAWNING_TIME;
-    t->shieldTimeLeft = 4;
+    t->spawningTime =
+        resetTier ? game.tankSpecs[t->type].respawnTime : SPAWNING_TIME;
     t->immobileTimeLeft = 0;
     t->firedBulletCount = 0;
     t->isMoving = false;
@@ -976,18 +1031,22 @@ static void loadHiScore() {
 
 static void initGameRun() {
     saveHiScore();
-    for (int i = 0; i < FLAG_COUNT; i++) game.flags[i].isDead = false;
-    game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = LIFE_COUNT};
-    game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = LIFE_COUNT};
+    for (int i = 0; i < FLAG_COUNT; i++) game.flags[i].lifes = FLAG_LIFES;
+    game.tanks[TPlayer1] =
+        (Tank){.type = TPlayer1, .lifes = LIFE_COUNT, .level = 0};
+    game.tanks[TPlayer2] =
+        (Tank){.type = TPlayer2, .lifes = LIFE_COUNT, .level = 0};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
                                           .maxBulletCount = 1,
+                                          .respawnTime = PLAYWER_RESPAWN_TIME,
                                           .speed = PLAYER_SPEED};
     game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
                                           .maxBulletCount = 1,
+                                          .respawnTime = PLAYWER_RESPAWN_TIME,
                                           .speed = PLAYER_SPEED};
     game.isDieSoundtrackPlayed = false;
     memset(game.playerScores, 0, sizeof(game.playerScores));
@@ -1530,6 +1589,15 @@ static void checkStageEnd() {
     }
 }
 
+static void handleLevelUp(Tank *t) {
+    for (int i = t->level; i < ASIZE(levelUps); i++) {
+        if (game.playerScores[t->type].totalScore >= levelUps[i].score) {
+            t->level++;
+            levelUps[i].levelUp(t);
+        }
+    }
+}
+
 static void checkBulletHit(Bullet *b) {
     int tankHitboxOffset = 4;
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
@@ -1559,6 +1627,7 @@ static void checkBulletHit(Bullet *b) {
         if (!isEnemy(b->tank)) {
             addScore(b->tank->type, game.tankSpecs[t->type].points);
             game.playerScores[b->tank->type].kills[t->type]++;
+            handleLevelUp(b->tank);
         }
         PlaySound(isEnemy(t) ? game.sounds.bullet_explosion
                              : game.sounds.big_explosion);
@@ -1579,9 +1648,14 @@ static bool checkBulletToBulletCollision(Bullet *b) {
     return false;
 }
 
-static void destroyFlag(int i) {
-    createExplosion(ETBig, game.flags[i].pos, FLAG_SIZE, -1);
-    game.flags[i].isDead = true;
+static bool hitFlag(int i) {
+    game.flags[i].lifes--;
+    if (game.flags[i].lifes <= 0) {
+        createExplosion(ETBig, game.flags[i].pos, FLAG_SIZE, -1);
+        PlaySound(game.sounds.big_explosion);
+        return true;
+    }
+    return false;
 }
 
 static bool checkFlagHit(Bullet *b) {
@@ -1591,9 +1665,7 @@ static bool checkFlagHit(Bullet *b) {
                       game.flags[i].pos.x, game.flags[i].pos.y, FLAG_SIZE,
                       FLAG_SIZE)) {
             destroyBullet(b, true);
-            destroyFlag(i);
-            PlaySound(game.sounds.big_explosion);
-            return true;
+            return hitFlag(i);
         }
     }
     return false;
@@ -1701,6 +1773,9 @@ static void updateGameState() {
             if (tank->spawningTime <= 0) {
                 tank->spawningTime = 0;
                 tank->status = TSActive;
+                if (!isEnemy(tank)) {
+                    tank->shieldTimeLeft = 4;
+                }
                 if (tank->powerUp) {
                     for (int k = 0; k < MAX_POWERUP_COUNT; k++) {
                         if (game.powerUps[k].state == PUSActive) {
@@ -1884,7 +1959,7 @@ static void titleLogic() {
         game.title = (Title){0};
         setScreen(GSPlay);
         initGameRun();
-        initStage(2);
+        initStage(1);
     }
 }
 
