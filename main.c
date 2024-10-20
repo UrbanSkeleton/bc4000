@@ -36,30 +36,6 @@ typedef struct {
     int col;
 } CellInfo;
 
-const CellInfo fortressWall[] = {
-    {13 * 4 - 6 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 2 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 2 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 2 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 3 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 3 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 3 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 8 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 8 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 8 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 9 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 9 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 9 + 4},
-
-    {13 * 4 - 6 + 2, 6 * 4 + 0 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 0 + 4},
-    {13 * 4 - 6 + 2, 6 * 4 + 1 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 1 + 4},
-
-    {13 * 4 - 6 + 2, 6 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 2 + 4},
-    {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
-};
-
 const int FLAG_COUNT = 2;
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
@@ -77,7 +53,7 @@ const float SHOVEL_TIME = 15.0;
 const int POWERUP_SCORE = 500;
 const int MAX_POWERUP_COUNT = 3;
 const int STAGE_COUNT = 16;
-const int PLAYGROUND_COLS = 4 * 13 * 2;
+const int PLAYGROUND_COLS = 4 * (13 * 2 + 1);
 const int PLAYGROUND_ROWS = 4 * 13;
 const int LEFT_EDGE_COLS = 4;
 const int RIGHT_EDGE_COLS = 4 * 2;
@@ -120,28 +96,45 @@ const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
 const float ENEMY_SPAWN_INTERVAL = 3.0f;
 const float SPAWNING_TIME = 0.7f;
+const float PLAYWER_RESPAWN_TIME = 5.0f;
 const int POWERUP_POSITIONS_COUNT = 16;
 const int LIFE_COUNT = 127;
 const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
+    {(4 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (7 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(4 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (4 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(7 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (7 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(7 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (4 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
 
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
+    {(1 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (7 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(1 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (4 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(10 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (7 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(10 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (4 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
 
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
+    {(1 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (1 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(1 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (10 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(10 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (1 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(10 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (10 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
 
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE}};
+    {(4 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (1 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(7 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (10 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(4 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (1 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE},
+    {(7 * 4 + 2 + LEFT_EDGE_COLS) * CELL_SIZE,
+     (10 * 4 + 2 + TOP_EDGE_ROWS) * CELL_SIZE}};
 
 typedef enum {
     TPlayer1,
@@ -183,12 +176,8 @@ typedef struct {
 } TankSpec;
 
 typedef enum {
-    PUStar,
-    PUTank,
     PUGrenade,
     PUTimer,
-    PUShield,
-    PUShovel,
     PUMax,
 } PowerUpType;
 
@@ -383,7 +372,6 @@ typedef struct {
     PlayerScore playerScores[2];
     PowerUp powerUps[MAX_POWERUP_COUNT];
     float timerPowerUpTimeLeft;
-    float shovelPowerUpTimeLeft;
     void (*logic)();
     void (*draw)();
     Title title;
@@ -423,7 +411,9 @@ static void drawCell(Cell *cell, bool isLeftHalf) {
     DrawTexturePro(*tex, (Rectangle){col * w, cell->texRow * h, w, h},
                    (Rectangle){cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE},
                    (Vector2){CELL_SIZE / 2, CELL_SIZE / 2},
-                   isLeftHalf ? 90 : -90, WHITE);
+                   isLeftHalf ? 90 : -90,
+                   // 0,
+                   WHITE);
 #ifdef DRAW_CELL_GRID
     DrawRectangleLines(cell->pos.x, cell->pos.y, CELL_SIZE, CELL_SIZE, BLUE);
 #endif
@@ -434,7 +424,7 @@ static void drawField() {
         for (int j = 0; j < FIELD_COLS; j++) {
             if (game.field[i][j].type != CTForest)
                 drawCell(&game.field[i][j],
-                         j < LEFT_EDGE_COLS + PLAYGROUND_COLS / 2);
+                         j < LEFT_EDGE_COLS + PLAYGROUND_COLS / 2 + 2);
         }
     }
 }
@@ -444,7 +434,7 @@ static void drawForest() {
         for (int j = 0; j < FIELD_COLS; j++) {
             if (game.field[i][j].type == CTForest)
                 drawCell(&game.field[i][j],
-                         j < LEFT_EDGE_COLS + PLAYGROUND_COLS / 2);
+                         j < LEFT_EDGE_COLS + PLAYGROUND_COLS / 2 + 2);
         }
     }
 }
@@ -489,8 +479,9 @@ static void drawSpawningTank(Tank *tank) {
     static char textureCols[] = {3, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3};
     Texture2D *tex = &game.textures.spawningTank;
     int textureSize = tex->height;
-    int i = tank->spawningTime / (SPAWNING_TIME / ASIZE(textureCols));
-    if (i >= ASIZE(textureCols)) i = ASIZE(textureCols) - 1;
+    int i = (tank->spawningTime) / (SPAWNING_TIME / ASIZE(textureCols));
+    i = i % ASIZE(textureCols);
+    // if (i >= ASIZE(textureCols)) i = ASIZE(textureCols) - 1;
     int texX = textureCols[i] * textureSize;
     int drawSize = SPAWN_TEXTURE_SIZE * 2;
     DrawTexturePro(*tex, (Rectangle){texX, 0, textureSize, textureSize},
@@ -852,6 +843,7 @@ static void spawnPlayer(Tank *t, bool resetTier) {
     t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
     t->direction = t->type == TPlayer1 ? DRight : DLeft;
     t->status = TSSpawning;
+    t->spawningTime = resetTier ? PLAYWER_RESPAWN_TIME : SPAWNING_TIME;
     t->shieldTimeLeft = 4;
     t->immobileTimeLeft = 0;
     t->firedBulletCount = 0;
@@ -909,7 +901,6 @@ static void initStage(char stage) {
     game.gameOverTime = 0;
     game.stageEndTime = 0;
     game.timerPowerUpTimeLeft = 0;
-    game.shovelPowerUpTimeLeft = 0;
     game.stageCurtainTime = 0;
     game.isStageCurtainSoundPlayed = false;
     for (int i = 0; i < FIELD_ROWS; i++) {
@@ -928,15 +919,16 @@ static void initStage(char stage) {
                                    TOP_EDGE_ROWS + PLAYGROUND_ROWS - 4};
     for (int i = 0; i < MAX_ENEMY_COUNT; i++) {
         TankType type = levelTanks[stage - 1][i];
-        game.tanks[i + 2] = (Tank){
-            .type = type,
-            .pos = (Vector2){CELL_SIZE * (LEFT_EDGE_COLS +
-                                          (PLAYGROUND_COLS / 2) - 4 * (i % 2)),
-                             CELL_SIZE * startingRows[i % 3]},
-            .direction = DDown,
-            .status = TSPending,
-            .isMoving = true,
-            .lifes = game.tankSpecs[type].lifes};
+        game.tanks[i + 2] =
+            (Tank){.type = type,
+                   .pos = (Vector2){CELL_SIZE * (LEFT_EDGE_COLS +
+                                                 (PLAYGROUND_COLS / 2 - 2 - 4) +
+                                                 8 * (i % 2)),
+                                    CELL_SIZE * startingRows[i % 3]},
+                   .direction = DDown,
+                   .status = TSPending,
+                   .isMoving = true,
+                   .lifes = game.tankSpecs[type].lifes};
         if (i + 1 == 4)
             game.tanks[i + 2].powerUp = &game.powerUps[0];
         else if (i + 1 == 11)
@@ -949,6 +941,12 @@ static void initStage(char stage) {
             .type = rand() % PUMax,
             .pos = POWERUP_POSITIONS[rand() % POWERUP_POSITIONS_COUNT],
             .state = PUSPending};
+        if (rand() % 2) {
+            int left = LEFT_EDGE_COLS * CELL_SIZE;
+            float x = game.powerUps[i].pos.x - left;
+            game.powerUps[i].pos.x =
+                left + (PLAYGROUND_COLS - 4) * CELL_SIZE - x;
+        }
     }
     memset(game.bullets, 0, sizeof(game.bullets));
     memset(game.explosions, 0, sizeof(game.explosions));
@@ -1054,18 +1052,10 @@ static void initGame() {
                    .points = 400,
                    .lifes = 4,
                    .isEnemy = true};
-    game.powerUpSpecs[PUTank] =
-        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 0};
     game.powerUpSpecs[PUTimer] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 1};
-    game.powerUpSpecs[PUShovel] =
-        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 2};
     game.powerUpSpecs[PUGrenade] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 3};
-    game.powerUpSpecs[PUStar] =
-        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
-    game.powerUpSpecs[PUShield] =
-        (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
 }
 
 static void fireBullet(Tank *t) {
@@ -1284,44 +1274,11 @@ static void handlePowerUpHit(Tank *t) {
             createScorePopup(4, p->pos, POWER_UP_SIZE);
             addScore(t->type, POWERUP_SCORE);
             switch (p->type) {
-                case PUTank:
-                    t->lifes++;
-                    break;
-                case PUStar:
-                    if (t->tier == 3) return;
-                    t->tier++;
-                    game.tankSpecs[t->type].texRow++;
-                    switch (t->tier) {
-                        case 1:
-                            game.tankSpecs[t->type].bulletSpeed =
-                                BULLET_SPEEDS[2];
-                            break;
-                        case 2:
-                            game.tankSpecs[t->type].maxBulletCount = 2;
-                            break;
-                        case 3:
-                            break;
-                    }
-                    break;
                 case PUGrenade:
                     destroyAllTanks();
                     break;
                 case PUTimer:
                     game.timerPowerUpTimeLeft = TIMER_TIME;
-                    break;
-                case PUShield:
-                    t->shieldTimeLeft = SHIELD_TIME;
-                    break;
-                case PUShovel:
-                    game.shovelPowerUpTimeLeft = SHOVEL_TIME;
-                    for (int i = 0; i < ASIZE(fortressWall); i++) {
-                        game.field[fortressWall[i].row][fortressWall[i].col]
-                            .type = CTConcrete;
-                        game.field[fortressWall[i].row][fortressWall[i].col]
-                            .texRow = fortressWall[i].row % 2;
-                        game.field[fortressWall[i].row][fortressWall[i].col]
-                            .texCol = fortressWall[i].col % 2;
-                    }
                     break;
                 case PUMax:
                     break;
@@ -1721,6 +1678,7 @@ static void spawnTanks() {
     for (int i = 2; i < MAX_TANK_COUNT; i++) {
         if (game.tanks[i].status == TSPending) {
             game.tanks[i].status = TSSpawning;
+            game.tanks[i].spawningTime = SPAWNING_TIME;
             game.activeEnemyCount++;
             game.pendingEnemyCount--;
             return;
@@ -1739,8 +1697,8 @@ static void updateGameState() {
         if (tank->status == TSActive) {
             // updateTankState(&game.tanks[i]);
         } else if (tank->status == TSSpawning) {
-            tank->spawningTime += game.frameTime;
-            if (tank->spawningTime >= SPAWNING_TIME) {
+            tank->spawningTime -= game.frameTime;
+            if (tank->spawningTime <= 0) {
                 tank->spawningTime = 0;
                 tank->status = TSActive;
                 if (tank->powerUp) {
@@ -1926,7 +1884,7 @@ static void titleLogic() {
         game.title = (Title){0};
         setScreen(GSPlay);
         initGameRun();
-        initStage(1);
+        initStage(2);
     }
 }
 
@@ -1976,15 +1934,6 @@ static void gameLogic() {
     game.timeSinceSpawn += game.frameTime;
     if (game.timerPowerUpTimeLeft > 0) {
         game.timerPowerUpTimeLeft -= game.frameTime;
-    }
-    if (game.shovelPowerUpTimeLeft > 0) {
-        game.shovelPowerUpTimeLeft -= game.frameTime;
-        if (game.shovelPowerUpTimeLeft <= 0) {
-            for (int i = 0; i < ASIZE(fortressWall); i++) {
-                game.field[fortressWall[i].row][fortressWall[i].col].type =
-                    CTBrick;
-            }
-        }
     }
     if (game.tanks[TPlayer1].shieldTimeLeft > 0) {
         game.tanks[TPlayer1].shieldTimeLeft -= game.frameTime;
