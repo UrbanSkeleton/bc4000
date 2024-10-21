@@ -1296,17 +1296,31 @@ static void destroyTank(Tank *t, bool scorePopup) {
     createExplosion(ETBig, t->pos, TANK_SIZE, scorePopupTexCol);
 }
 
-static void destroyAllTanks() {
-    for (int i = 0; i < MAX_TANK_COUNT; i++) {
-        Tank *t = &game.tanks[i + 2];
-        if (t->status == TSActive) destroyTank(t, false);
+static void handleLevelUp(Tank *t) {
+    for (int i = t->level; i < ASIZE(levelUps); i++) {
+        if (game.playerScores[t->type].totalScore >= levelUps[i].score) {
+            t->level++;
+            levelUps[i].levelUp(t);
+        }
     }
-    PlaySound(game.sounds.bullet_explosion);
 }
 
 static void addScore(TankType type, int score) {
     game.playerScores[type].totalScore += score;
     game.hiScore = MAX(game.hiScore, game.playerScores[type].totalScore);
+}
+
+static void destroyAllTanks(Tank *player) {
+    for (int i = 0; i < MAX_TANK_COUNT; i++) {
+        Tank *t = &game.tanks[i + 2];
+        if (t->status == TSActive) {
+            destroyTank(t, true);
+            addScore(player->type, game.tankSpecs[t->type].points);
+            game.playerScores[player->type].kills[t->type]++;
+        }
+    }
+    handleLevelUp(player);
+    PlaySound(game.sounds.bullet_explosion);
 }
 
 static void handlePowerUpHit(Tank *t) {
@@ -1329,7 +1343,7 @@ static void handlePowerUpHit(Tank *t) {
             addScore(t->type, POWERUP_SCORE);
             switch (p->type) {
                 case PUGrenade:
-                    destroyAllTanks();
+                    destroyAllTanks(t);
                     break;
                 case PUTimer:
                     game.timerPowerUpTimeLeft = TIMER_TIME;
@@ -1580,15 +1594,6 @@ static void checkStageEnd() {
     if (game.stageEndTime >= STAGE_END_TIME ||
         game.gameOverTime >= GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
         setScreen(GSScore);
-    }
-}
-
-static void handleLevelUp(Tank *t) {
-    for (int i = t->level; i < ASIZE(levelUps); i++) {
-        if (game.playerScores[t->type].totalScore >= levelUps[i].score) {
-            t->level++;
-            levelUps[i].levelUp(t);
-        }
     }
 }
 
