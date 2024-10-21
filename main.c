@@ -424,8 +424,9 @@ void levelUp3(Tank *t) {
 }
 
 void levelUp4(Tank *t) {
-    t->tier = 3;
-    game.tankSpecs[t->type].texRow++;
+    // t->tier = 3;
+    // game.tankSpecs[t->type].texRow++;
+    game.tankSpecs[t->type].speed *= 1.5;
 }
 
 static void drawText(const char *text, int x, int y, int fontSize,
@@ -894,21 +895,15 @@ static void initUIElements() {
     }
 }
 
-static void spawnPlayer(Tank *t, bool resetTier) {
+static void spawnPlayer(Tank *t, bool afterKill) {
     t->pos = t->type == TPlayer1 ? PLAYER1_START_POS : PLAYER2_START_POS;
     t->direction = t->type == TPlayer1 ? DRight : DLeft;
     t->status = TSSpawning;
     t->spawningTime =
-        resetTier ? game.tankSpecs[t->type].respawnTime : SPAWNING_TIME;
+        afterKill ? game.tankSpecs[t->type].respawnTime : SPAWNING_TIME;
     t->immobileTimeLeft = 0;
     t->firedBulletCount = 0;
     t->isMoving = false;
-    if (resetTier) {
-        t->tier = 0;
-        game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[0];
-        game.tankSpecs[t->type].maxBulletCount = 1;
-        game.tankSpecs[t->type].texRow = 0;
-    }
 }
 
 static TankType levelTanks[LEVEL_COUNT][MAX_ENEMY_COUNT] = {
@@ -980,7 +975,7 @@ static void initStage(char stage) {
                                                  (PLAYGROUND_COLS / 2 - 2 - 4) +
                                                  8 * (i % 2)),
                                     CELL_SIZE * startingRows[i % 3]},
-                   .direction = DDown,
+                   .direction = i % 2 ? DRight : DLeft,
                    .status = TSPending,
                    .isMoving = true,
                    .lifes = game.tankSpecs[type].lifes};
@@ -1418,8 +1413,7 @@ static float randomFloat() { return (float)rand() / (float)RAND_MAX; }
 static bool randomTrue(float trueChance) { return randomFloat() < trueChance; }
 
 static void handleTankAI(Tank *t) {
-    static Direction dirs[] = {DDown,  DDown, DDown, DDown, DRight,
-                               DRight, DLeft, DLeft, DUp};
+    static Direction dirs[] = {DDown, DRight, DRight, DLeft, DLeft, DUp};
     Command cmd = {};
     cmd.fire = randomTrue(0.03f);
     cmd.move = t->isMoving ? randomTrue(0.999f) : randomTrue(0.50f);
