@@ -1580,10 +1580,6 @@ static void gameOver() { game.gameOverTime = 0.001; }
 static void handlePlayerKill(Tank *t) {
     if (game.gameOverTime > 0) return;
     if (isEnemy(t)) return;
-    if (t->lifes < 0) {
-        gameOver();
-        return;
-    }
     spawnPlayer(t, true);
 }
 
