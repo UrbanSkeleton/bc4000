@@ -36,7 +36,9 @@ typedef struct {
     int col;
 } CellInfo;
 
-const int FLAG_LIFES = 100;
+const short PLAYER_KILL_POINTS = 500;
+const short FLAG_KILL_POINTS = 1000;
+const int FLAG_LIFES = 10;
 const int FLAG_COUNT = 2;
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
@@ -212,18 +214,22 @@ typedef struct {
     char level;
 } Tank;
 
-static void levelUp1(Tank *t);
-static void levelUp2(Tank *t);
-static void levelUp3(Tank *t);
-static void levelUp4(Tank *t);
+static void levelUpTier1(Tank *t);
+static void levelUpFasterRespawn(Tank *t);
+static void levelUpTier2(Tank *t);
+static void levelUpSpeed(Tank *t);
+static void levelUpFlagHealth(Tank *t);
 
 typedef struct {
     int score;
     void (*levelUp)(Tank *t);
 } LevelUp;
 
-static LevelUp levelUps[] = {
-    {1000, levelUp1}, {3000, levelUp2}, {6000, levelUp3}, {10000, levelUp4}};
+static LevelUp levelUps[] = {{1000, levelUpTier1},
+                             {3000, levelUpFasterRespawn},
+                             {6000, levelUpTier2},
+                             {10000, levelUpSpeed},
+                             {20000, levelUpFlagHealth}};
 
 typedef struct {
     bool fire;
@@ -407,27 +413,29 @@ typedef struct {
 
 static Game game;
 
-void levelUp1(Tank *t) {
+void levelUpTier1(Tank *t) {
     t->tier = 1;
     game.tankSpecs[t->type].texRow++;
     game.tankSpecs[t->type].bulletSpeed = BULLET_SPEEDS[2];
 }
 
-void levelUp2(Tank *t) {
+void levelUpFasterRespawn(Tank *t) {
     game.tankSpecs[t->type].respawnTime = PLAYWER_RESPAWN_TIME / 2;
 }
 
-void levelUp3(Tank *t) {
+void levelUpTier2(Tank *t) {
     t->tier = 2;
     game.tankSpecs[t->type].texRow++;
     game.tankSpecs[t->type].maxBulletCount = 2;
 }
 
-void levelUp4(Tank *t) {
+void levelUpSpeed(Tank *t) {
     // t->tier = 3;
     // game.tankSpecs[t->type].texRow++;
     game.tankSpecs[t->type].speed *= 1.5;
 }
+
+void levelUpFlagHealth(Tank *t) { game.flags[t->type].lifes += 50; }
 
 static void drawText(const char *text, int x, int y, int fontSize,
                      Color color) {
@@ -645,6 +653,14 @@ static void drawTopUI() {
     snprintf(text, 50, "Lifes: %d", game.flags[1].lifes);
     drawText(text, (LEFT_EDGE_COLS + PLAYGROUND_COLS - 16) * CELL_SIZE,
              2 * CELL_SIZE, FONT_SIZE / 2, WHITE);
+
+    // Draw players' points
+    snprintf(text, 50, "%05d", game.playerScores[TPlayer1].totalScore);
+    drawText(text, (LEFT_EDGE_COLS + PLAYGROUND_COLS / 2 - 10) * CELL_SIZE,
+             CELL_SIZE, FONT_SIZE, WHITE);
+    snprintf(text, 50, "%05d", game.playerScores[TPlayer2].totalScore);
+    drawText(text, (LEFT_EDGE_COLS + PLAYGROUND_COLS / 2 + 2) * CELL_SIZE,
+             CELL_SIZE, FONT_SIZE, WHITE);
 }
 
 static void drawUI() {
@@ -953,6 +969,7 @@ static void initStage(char stage) {
     game.timerPowerUpTimeLeft = 0;
     game.stageCurtainTime = 0;
     game.isStageCurtainSoundPlayed = false;
+    for (int i = 0; i < FLAG_COUNT; i++) game.flags[i].lifes = FLAG_LIFES;
     for (int i = 0; i < FIELD_ROWS; i++) {
         for (int j = 0; j < FIELD_COLS; j++) {
             game.field[i][j] =
@@ -963,7 +980,6 @@ static void initStage(char stage) {
     loadStage(game.stage);
     spawnPlayer(&game.tanks[TPlayer1], false);
     spawnPlayer(&game.tanks[TPlayer2], false);
-
     static char startingRows[3] = {TOP_EDGE_ROWS,
                                    TOP_EDGE_ROWS + (PLAYGROUND_ROWS - 4) / 2,
                                    TOP_EDGE_ROWS + PLAYGROUND_ROWS - 4};
@@ -1026,7 +1042,6 @@ static void loadHiScore() {
 
 static void initGameRun() {
     saveHiScore();
-    for (int i = 0; i < FLAG_COUNT; i++) game.flags[i].lifes = FLAG_LIFES;
     game.tanks[TPlayer1] =
         (Tank){.type = TPlayer1, .lifes = LIFE_COUNT, .level = 0};
     game.tanks[TPlayer2] =
@@ -1036,13 +1051,15 @@ static void initGameRun() {
                                           .bulletSpeed = BULLET_SPEEDS[0],
                                           .maxBulletCount = 1,
                                           .respawnTime = PLAYWER_RESPAWN_TIME,
-                                          .speed = PLAYER_SPEED};
+                                          .speed = PLAYER_SPEED,
+                                          .points = PLAYER_KILL_POINTS};
     game.tankSpecs[TPlayer2] = (TankSpec){.texture = &game.textures.player2Tank,
                                           .texRow = 0,
                                           .bulletSpeed = BULLET_SPEEDS[0],
                                           .maxBulletCount = 1,
                                           .respawnTime = PLAYWER_RESPAWN_TIME,
-                                          .speed = PLAYER_SPEED};
+                                          .speed = PLAYER_SPEED,
+                                          .points = PLAYER_KILL_POINTS};
     game.isDieSoundtrackPlayed = false;
     memset(game.playerScores, 0, sizeof(game.playerScores));
 }
@@ -1575,7 +1592,7 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
     }
 }
 
-static void gameOver() { game.gameOverTime = 0.001; }
+// static void gameOver() { game.gameOverTime = 0.001; }
 
 static void handlePlayerKill(Tank *t) {
     if (game.gameOverTime > 0) return;
@@ -1584,7 +1601,8 @@ static void handlePlayerKill(Tank *t) {
 }
 
 static void checkStageEnd() {
-    if (game.pendingEnemyCount + game.activeEnemyCount == 0) {
+    if (game.pendingEnemyCount + game.activeEnemyCount == 0 ||
+        game.flags[TPlayer1].lifes <= 0 || game.flags[TPlayer2].lifes <= 0) {
         game.stageEndTime += game.frameTime;
     }
     if (game.stageEndTime >= STAGE_END_TIME ||
@@ -1648,13 +1666,15 @@ static bool hitFlag(int i) {
     if (game.flags[i].lifes <= 0) {
         createExplosion(ETBig, game.flags[i].pos, FLAG_SIZE, -1);
         PlaySound(game.sounds.big_explosion);
+        game.playerScores[i == 0 ? TPlayer2 : TPlayer1].totalScore +=
+            FLAG_KILL_POINTS;
         return true;
     }
     return false;
 }
 
 static bool checkFlagHit(Bullet *b) {
-    if (game.gameOverTime) return false;
+    if (game.gameOverTime || game.stageEndTime) return false;
     for (int i = 0; i < FLAG_COUNT; i++) {
         if (collision(b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE,
                       game.flags[i].pos.x, game.flags[i].pos.y, FLAG_SIZE,
@@ -1668,7 +1688,6 @@ static bool checkFlagHit(Bullet *b) {
 
 static void checkBulletCollision(Bullet *b) {
     if (checkFlagHit(b)) {
-        gameOver();
         return;
     }
     if (checkBulletToBulletCollision(b)) return;
