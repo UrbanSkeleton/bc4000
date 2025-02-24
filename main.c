@@ -7,7 +7,7 @@
 #include "utils.c"
 
 // #define DRAW_CELL_GRID
-// #define ALT_ASSETS
+#define ALT_ASSETS
 
 #ifdef ALT_ASSETS
 #define ASSETDIR "alt"
@@ -401,6 +401,7 @@ typedef struct {
     char soundtrack;
     bool isDieSoundtrackPlayed;
     Font font;
+    Shader explosionShader;
 } Game;
 
 static Game game;
@@ -544,16 +545,43 @@ static void drawExplosions() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         Explosion *e = &game.explosions[i];
         if (e->ttl <= 0) continue;
+
+        float duration = game.explosionAnimations[e->type].duration;
         int texCount = game.explosionAnimations[e->type].textureCount;
-        int index =
-            e->ttl / (game.explosionAnimations[e->type].duration / texCount);
-        if (index >= texCount) index = texCount - 1;
-        Texture2D *tex =
-            &game.explosionAnimations[e->type].textures[texCount - index - 1];
-        DrawTexturePro(
-            *tex, (Rectangle){0, 0, tex->width, tex->height},
-            (Rectangle){e->pos.x, e->pos.y, tex->width * 2, tex->height * 2},
-            (Vector2){}, 0, WHITE);
+        float timePerTexture = duration / texCount;
+
+        float progress = (duration - e->ttl) / timePerTexture;
+        int currentIndex = (int)progress;
+        int nextIndex = currentIndex + 1;
+
+        if (nextIndex >= texCount) {
+            nextIndex = texCount - 1;
+        }
+
+        float mixFactor = progress - (float)currentIndex;
+
+        Texture2D *currentTex =
+            &game.explosionAnimations[e->type].textures[currentIndex];
+        Texture2D *nextTex =
+            &game.explosionAnimations[e->type].textures[nextIndex];
+
+        int loc0 = GetShaderLocation(game.explosionShader, "texture0");
+        SetShaderValueTexture(game.explosionShader, loc0, *currentTex);
+
+        int loc1 = GetShaderLocation(game.explosionShader, "texture1");
+        SetShaderValueTexture(game.explosionShader, loc1, *nextTex);
+
+        int mixLoc = GetShaderLocation(game.explosionShader, "mixFactor");
+        SetShaderValue(game.explosionShader, mixLoc, &mixFactor,
+                       SHADER_UNIFORM_FLOAT);
+
+        BeginShaderMode(game.explosionShader);
+        DrawTexturePro(*currentTex,
+                       (Rectangle){0, 0, currentTex->width, currentTex->height},
+                       (Rectangle){e->pos.x, e->pos.y, currentTex->width * 2,
+                                   currentTex->height * 2},
+                       (Vector2){}, 0, WHITE);
+        EndShaderMode();
     }
 }
 
@@ -1056,6 +1084,7 @@ static void initGame() {
     loadTextures();
     loadSounds();
     game.font = LoadFontEx("fonts/LiberationMono.ttf", 40, NULL, 0);
+    game.explosionShader = LoadShader(NULL, "shaders/texture_interpolation.fs");
     game.explosionAnimations[ETBullet] =
         (Animation){.duration = BULLET_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bulletExplosions),
@@ -2191,6 +2220,7 @@ int main(void) {
 #endif
     }
 
+    UnloadShader(game.explosionShader);
     UnloadFont(game.font);
 
     saveHiScore();
