@@ -535,13 +535,13 @@ static void drawFlag() {
 }
 
 static void drawBullets() {
-    static int x[4] = {24, 8, 0, 16};
+    static int x[4] = {48, 16, 0, 32};
     Texture2D *tex = &game.textures.bullet;
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
         if (b->type == BTNone) continue;
         DrawTexturePro(
-            *tex, (Rectangle){x[b->direction], 0, 8, 8},
+            *tex, (Rectangle){x[b->direction], 0, 16, 16},
             (Rectangle){b->pos.x, b->pos.y, BULLET_SIZE, BULLET_SIZE},
             (Vector2){}, 0, WHITE);
     }
@@ -838,7 +838,7 @@ static void loadTextures() {
         LoadTexture("textures/" ASSETDIR "/player1.png");
     game.textures.player2Tank =
         LoadTexture("textures/" ASSETDIR "/player2.png");
-    game.textures.bullet = LoadTexture("textures/" ASSETDIR "/bullet.png");
+    game.textures.bullet = LoadTexture("textures/" ASSETDIR "/bullet1.png");
     game.textures.bulletExplosions[0] =
         LoadTexture("textures/" ASSETDIR "/bullet_explosion_1.png");
     game.textures.bulletExplosions[1] =
