@@ -1240,9 +1240,9 @@ static void createBulletTrail(Vector2 pos, Direction direction, Color color) {
                 (ParticleExplosion){.shader = game.explosionShader,
                                     .time = 0,
                                     .position = pos,
-                                    .radius = 8,  // Smaller radius for trail
-                                    .maxRadius = 8,
-                                    .duration = 0.5f,  // Shorter duration
+                                    .radius = 12,
+                                    .maxRadius = 12,
+                                    .duration = 0.5f,
                                     .color = color,
                                     .active = true,
                                     .effectType = 1,
@@ -1258,7 +1258,11 @@ static void updateParticleExplosions() {
         if (!e->active) continue;
 
         e->time += game.frameTime;
-        e->radius = e->maxRadius * (e->time / e->duration);
+        if (e->effectType == 0) {
+            e->radius = e->maxRadius * (e->time / e->duration);
+        } else {
+            e->radius = e->maxRadius * (1.0f - (e->time / e->duration));
+        }
 
         if (e->time >= e->duration) {
             e->active = false;
