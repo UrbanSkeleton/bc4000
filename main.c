@@ -568,57 +568,23 @@ static void drawScorePopups() {
     }
 }
 
-bool hasFileChanged(const char *filename) {
-    static double lastCheckTime = 0;
-    double now = GetTime();
-    if (lastCheckTime != 0 && now - lastCheckTime < 1.0) return false;
-    lastCheckTime = now;
-
-    static time_t lastModTime = 0;
-    struct stat fileStat;
-    if (stat(filename, &fileStat) != 0) {
-        return false;
-    }
-    if (fileStat.st_mtime > lastModTime) {
-        lastModTime = fileStat.st_mtime;
-        return true;
-    }
-    return false;
-}
-
 static void drawParticleExplosions() {
-    if (hasFileChanged("shaders/explosions.fs")) {
-        game.explosionShader = LoadShader(NULL, "shaders/explosions.fs");
-    }
+    BeginShaderMode(game.explosionShader);
 
-    Shader shader;
     for (int i = 0; i < MAX_PARTICLE_EXPLOSIONS; i++) {
         ParticleExplosion *e = &game.pexplosions[i];
-        if (!e->active) continue;
+        if (!e->active || e->effectType != 0) continue;
 
-        if (e->effectType == 1) {
-            shader = game.trailShader;
-            SetShaderValue(shader, game.trailTimeLoc, &e->time,
-                           SHADER_UNIFORM_FLOAT);
-            float color[4] = {
-                (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
-                (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
-            SetShaderValue(shader, game.trailColorLoc, color,
-                           SHADER_UNIFORM_VEC4);
-        } else {
-            shader = game.explosionShader;
-            SetShaderValue(shader, game.timeLoc, &e->time,
-                           SHADER_UNIFORM_FLOAT);
-            float color[4] = {
-                (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
-                (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
-            SetShaderValue(shader, game.colorLoc, color, SHADER_UNIFORM_VEC4);
-            float position[2] = {e->position.x, e->position.y};
-            SetShaderValue(shader, game.positionLoc, position,
-                           SHADER_UNIFORM_VEC2);
-        }
-
-        BeginShaderMode(shader);
+        SetShaderValue(game.explosionShader, game.timeLoc, &e->time,
+                       SHADER_UNIFORM_FLOAT);
+        float color[4] = {
+            (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
+            (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
+        SetShaderValue(game.explosionShader, game.colorLoc, color,
+                       SHADER_UNIFORM_VEC4);
+        float position[2] = {e->position.x, e->position.y};
+        SetShaderValue(game.explosionShader, game.positionLoc, position,
+                       SHADER_UNIFORM_VEC2);
 
         Texture2D default_texture = {
             .id = rlGetTextureIdDefault(),
@@ -632,8 +598,39 @@ static void drawParticleExplosions() {
         Rectangle dest = {e->position.x - e->radius, e->position.y - e->radius,
                           e->radius * 2, e->radius * 2};
         DrawTexturePro(default_texture, src, dest, (Vector2){}, 0, e->color);
-        EndShaderMode();
     }
+    EndShaderMode();
+}
+
+static void drawBulletTrails() {
+    BeginShaderMode(game.trailShader);
+
+    for (int i = 0; i < MAX_PARTICLE_EXPLOSIONS; i++) {
+        ParticleExplosion *e = &game.pexplosions[i];
+        if (!e->active || e->effectType != 1) continue;
+
+        SetShaderValue(game.trailShader, game.trailTimeLoc, &e->time,
+                       SHADER_UNIFORM_FLOAT);
+        float color[4] = {
+            (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
+            (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
+        SetShaderValue(game.trailShader, game.trailColorLoc, color,
+                       SHADER_UNIFORM_VEC4);
+
+        Texture2D default_texture = {
+            .id = rlGetTextureIdDefault(),
+            .width = 1,
+            .height = 1,
+            .mipmaps = 1,
+            .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+        };
+
+        Rectangle src = {0, 0, 1, 1};
+        Rectangle dest = {e->position.x - e->radius, e->position.y - e->radius,
+                          e->radius * 2, e->radius * 2};
+        DrawTexturePro(default_texture, src, dest, (Vector2){}, 0, e->color);
+    }
+    EndShaderMode();
 }
 
 static void drawUITanks() {
@@ -751,6 +748,7 @@ static void drawGame() {
     drawFlag();
     drawForest();
     drawParticleExplosions();
+    drawBulletTrails();
     drawScorePopups();
     drawPowerUps();
     drawUI();
