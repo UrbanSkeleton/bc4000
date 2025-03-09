@@ -422,6 +422,7 @@ typedef struct {
     Shader explosionShader;
     int timeLoc;
     int colorLoc;
+    int positionLoc;
 } Game;
 
 static Game game;
@@ -598,6 +599,9 @@ static void drawParticleExplosions() {
             (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
         SetShaderValue(game.explosionShader, game.colorLoc, color,
                        SHADER_UNIFORM_VEC4);
+        float position[2] = {e->position.x, e->position.y};
+        SetShaderValue(game.explosionShader, game.positionLoc, position,
+                       SHADER_UNIFORM_VEC2);
 
         Texture2D default_texture = {
             .id = rlGetTextureIdDefault(),
@@ -1135,6 +1139,7 @@ static void initExplosionShader() {
     // Get shader uniform locations
     game.timeLoc = GetShaderLocation(game.explosionShader, "time");
     game.colorLoc = GetShaderLocation(game.explosionShader, "color");
+    game.positionLoc = GetShaderLocation(game.explosionShader, "position");
 }
 
 static void initGame() {
@@ -1408,7 +1413,7 @@ static void createExplosion(ExplosionType type, Vector2 targetPos,
 
     createParticleExplosion((Vector2){targetPos.x + targetSize / 2.0,
                                       targetPos.y + targetSize / 2.0},
-                            radius, duration, color);
+                            radius * 2, duration, color);
 
     // Keep score popup functionality
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
