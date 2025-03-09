@@ -250,14 +250,16 @@ typedef struct {
 } Explosion;
 
 typedef struct {
-    Shader shader;     // Explosion particle shader
-    float time;        // Current time of explosion
-    Vector2 position;  // Center position of explosion
-    float radius;      // Current radius of explosion
-    float maxRadius;   // Maximum radius of explosion
-    float duration;    // Total duration of explosion
-    Color color;       // Color of explosion particles
-    bool active;       // Whether explosion is currently active
+    Shader shader;        // Explosion particle shader
+    float time;           // Current time of explosion
+    Vector2 position;     // Center position of explosion
+    float radius;         // Current radius of explosion
+    float maxRadius;      // Maximum radius of explosion
+    float duration;       // Total duration of explosion
+    Color color;          // Color of explosion particles
+    bool active;          // Whether explosion is currently active
+    int effectType;       // 0 for explosion, 1 for trail
+    Direction direction;  // For trail orientation
 } ParticleExplosion;
 
 typedef struct {
@@ -380,6 +382,7 @@ typedef struct {
     Tank tanks[MAX_TANK_COUNT];
     TankSpec tankSpecs[TMax];
     Bullet bullets[MAX_BULLET_COUNT];
+
     Vector2 flagPos;
     bool isFlagDead;
     CellSpec cellSpecs[CTMax];
@@ -420,9 +423,12 @@ typedef struct {
 
     ParticleExplosion pexplosions[MAX_PARTICLE_EXPLOSIONS];
     Shader explosionShader;
+    Shader trailShader;
     int timeLoc;
     int colorLoc;
     int positionLoc;
+    int trailTimeLoc;
+    int trailColorLoc;
 } Game;
 
 static Game game;
@@ -585,23 +591,34 @@ static void drawParticleExplosions() {
         game.explosionShader = LoadShader(NULL, "shaders/explosions.fs");
     }
 
-    BeginShaderMode(game.explosionShader);
-
+    Shader shader;
     for (int i = 0; i < MAX_PARTICLE_EXPLOSIONS; i++) {
         ParticleExplosion *e = &game.pexplosions[i];
         if (!e->active) continue;
 
-        // Set shader uniforms
-        SetShaderValue(game.explosionShader, game.timeLoc, &e->time,
-                       SHADER_UNIFORM_FLOAT);
-        float color[4] = {
-            (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
-            (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
-        SetShaderValue(game.explosionShader, game.colorLoc, color,
-                       SHADER_UNIFORM_VEC4);
-        float position[2] = {e->position.x, e->position.y};
-        SetShaderValue(game.explosionShader, game.positionLoc, position,
-                       SHADER_UNIFORM_VEC2);
+        if (e->effectType == 1) {
+            shader = game.trailShader;
+            SetShaderValue(shader, game.trailTimeLoc, &e->time,
+                           SHADER_UNIFORM_FLOAT);
+            float color[4] = {
+                (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
+                (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
+            SetShaderValue(shader, game.trailColorLoc, color,
+                           SHADER_UNIFORM_VEC4);
+        } else {
+            shader = game.explosionShader;
+            SetShaderValue(shader, game.timeLoc, &e->time,
+                           SHADER_UNIFORM_FLOAT);
+            float color[4] = {
+                (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
+                (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
+            SetShaderValue(shader, game.colorLoc, color, SHADER_UNIFORM_VEC4);
+            float position[2] = {e->position.x, e->position.y};
+            SetShaderValue(shader, game.positionLoc, position,
+                           SHADER_UNIFORM_VEC2);
+        }
+
+        BeginShaderMode(shader);
 
         Texture2D default_texture = {
             .id = rlGetTextureIdDefault(),
@@ -615,26 +632,7 @@ static void drawParticleExplosions() {
         Rectangle dest = {e->position.x - e->radius, e->position.y - e->radius,
                           e->radius * 2, e->radius * 2};
         DrawTexturePro(default_texture, src, dest, (Vector2){}, 0, e->color);
-        // DrawRectanglePro(dest, (Vector2){0, 0}, 0, e->color);
-    }
-
-    EndShaderMode();
-}
-
-static void drawExplosions() {
-    for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
-        Explosion *e = &game.explosions[i];
-        if (e->ttl <= 0) continue;
-        int texCount = game.explosionAnimations[e->type].textureCount;
-        int index =
-            e->ttl / (game.explosionAnimations[e->type].duration / texCount);
-        if (index >= texCount) index = texCount - 1;
-        Texture2D *tex =
-            &game.explosionAnimations[e->type].textures[texCount - index - 1];
-        DrawTexturePro(
-            *tex, (Rectangle){0, 0, tex->width, tex->height},
-            (Rectangle){e->pos.x, e->pos.y, tex->width * 2, tex->height * 2},
-            (Vector2){}, 0, WHITE);
+        EndShaderMode();
     }
 }
 
@@ -752,7 +750,6 @@ static void drawGame() {
     drawTanks();
     drawFlag();
     drawForest();
-    // drawExplosions();
     drawParticleExplosions();
     drawScorePopups();
     drawPowerUps();
@@ -1133,6 +1130,12 @@ static void initGameRun() {
     memset(game.playerScores, 0, sizeof(game.playerScores));
 }
 
+static void initTrailShader() {
+    game.trailShader = LoadShader(NULL, "shaders/trail.fs");
+    game.trailTimeLoc = GetShaderLocation(game.trailShader, "time");
+    game.trailColorLoc = GetShaderLocation(game.trailShader, "color");
+}
+
 static void initExplosionShader() {
     game.explosionShader = LoadShader(NULL, "shaders/explosions.fs");
 
@@ -1146,6 +1149,7 @@ static void initGame() {
     loadHiScore();
     loadTextures();
     initExplosionShader();
+    initTrailShader();
     loadSounds();
     game.font = LoadFontEx("fonts/LiberationMono.ttf", 40, NULL, 0);
     game.explosionAnimations[ETBullet] =
@@ -1226,6 +1230,25 @@ static void createParticleExplosion(Vector2 pos, float maxRadius,
                                     .duration = duration,
                                     .color = color,
                                     .active = true};
+            break;
+        }
+    }
+}
+
+static void createBulletTrail(Vector2 pos, Direction direction, Color color) {
+    for (int i = 0; i < MAX_PARTICLE_EXPLOSIONS; i++) {
+        if (!game.pexplosions[i].active) {
+            game.pexplosions[i] =
+                (ParticleExplosion){.shader = game.explosionShader,
+                                    .time = 0,
+                                    .position = pos,
+                                    .radius = 8,  // Smaller radius for trail
+                                    .maxRadius = 8,
+                                    .duration = 0.5f,  // Shorter duration
+                                    .color = color,
+                                    .active = true,
+                                    .effectType = 1,
+                                    .direction = direction};
             break;
         }
     }
@@ -1877,6 +1900,11 @@ static void updateBulletsState() {
         if (b->type == BTNone) continue;
         b->pos.x += (b->speed.x * game.frameTime);
         b->pos.y += (b->speed.y * game.frameTime);
+        Color trailColor = {255, 200, 0, 255};
+        createBulletTrail((Vector2){b->pos.x + BULLET_SIZE / 2.0,
+                                    b->pos.y + BULLET_SIZE / 2.0},
+                          b->direction, trailColor);
+
         checkBulletCollision(b);
     }
 }
@@ -2293,7 +2321,7 @@ int main(void) {
 
     int display = GetCurrentMonitor();
     SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
-    // ToggleFullscreen();
+    ToggleFullscreen();
 
     InitAudioDevice();
 
