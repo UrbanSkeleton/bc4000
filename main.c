@@ -1,8 +1,13 @@
 #include <assert.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
+//----------
 #include "raylib.h"
+#include "raymath.h"
+//----------
+#include "rlgl.h"
 #include "utils.c"
 
 // #define DRAW_CELL_GRID
@@ -101,6 +106,7 @@ const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 100;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
+const int MAX_PARTICLE_EXPLOSIONS = 100;
 const int MAX_SCORE_POPUP_COUNT = MAX_BULLET_COUNT;
 const Vector2 SCORE_POPUP_TEXTURE_SIZE = (Vector2){16, 9};
 const Vector2 SCORE_POPUP_SIZE = (Vector2){16 * 4, 9 * 4};
@@ -242,6 +248,17 @@ typedef struct {
     float maxTtl;
     int scorePopupTexCol;
 } Explosion;
+
+typedef struct {
+    Shader shader;     // Explosion particle shader
+    float time;        // Current time of explosion
+    Vector2 position;  // Center position of explosion
+    float radius;      // Current radius of explosion
+    float maxRadius;   // Maximum radius of explosion
+    float duration;    // Total duration of explosion
+    Color color;       // Color of explosion particles
+    bool active;       // Whether explosion is currently active
+} ParticleExplosion;
 
 typedef struct {
     int texCol;
@@ -400,6 +417,11 @@ typedef struct {
     char soundtrack;
     bool isDieSoundtrackPlayed;
     Font font;
+
+    ParticleExplosion pexplosions[MAX_PARTICLE_EXPLOSIONS];
+    Shader explosionShader;
+    int timeLoc;
+    int colorLoc;
 } Game;
 
 static Game game;
@@ -539,6 +561,62 @@ static void drawScorePopups() {
     }
 }
 
+bool hasFileChanged(const char *filename) {
+    static double lastCheckTime = 0;
+    double now = GetTime();
+    if (lastCheckTime != 0 && now - lastCheckTime < 1.0) return false;
+    lastCheckTime = now;
+
+    static time_t lastModTime = 0;
+    struct stat fileStat;
+    if (stat(filename, &fileStat) != 0) {
+        return false;
+    }
+    if (fileStat.st_mtime > lastModTime) {
+        lastModTime = fileStat.st_mtime;
+        return true;
+    }
+    return false;
+}
+
+static void drawParticleExplosions() {
+    if (hasFileChanged("shaders/explosions.fs")) {
+        game.explosionShader = LoadShader(NULL, "shaders/explosions.fs");
+    }
+
+    BeginShaderMode(game.explosionShader);
+
+    for (int i = 0; i < MAX_PARTICLE_EXPLOSIONS; i++) {
+        ParticleExplosion *e = &game.pexplosions[i];
+        if (!e->active) continue;
+
+        // Set shader uniforms
+        SetShaderValue(game.explosionShader, game.timeLoc, &e->time,
+                       SHADER_UNIFORM_FLOAT);
+        float color[4] = {
+            (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
+            (float)e->color.b / 255.0f, (float)e->color.a / 255.0f};
+        SetShaderValue(game.explosionShader, game.colorLoc, color,
+                       SHADER_UNIFORM_VEC4);
+
+        Texture2D default_texture = {
+            .id = rlGetTextureIdDefault(),
+            .width = 1,
+            .height = 1,
+            .mipmaps = 1,
+            .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+        };
+
+        Rectangle src = {0, 0, 1, 1};
+        Rectangle dest = {e->position.x - e->radius, e->position.y - e->radius,
+                          e->radius * 2, e->radius * 2};
+        DrawTexturePro(default_texture, src, dest, (Vector2){}, 0, e->color);
+        // DrawRectanglePro(dest, (Vector2){0, 0}, 0, e->color);
+    }
+
+    EndShaderMode();
+}
+
 static void drawExplosions() {
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         Explosion *e = &game.explosions[i];
@@ -670,7 +748,8 @@ static void drawGame() {
     drawTanks();
     drawFlag();
     drawForest();
-    drawExplosions();
+    // drawExplosions();
+    drawParticleExplosions();
     drawScorePopups();
     drawPowerUps();
     drawUI();
@@ -1050,9 +1129,18 @@ static void initGameRun() {
     memset(game.playerScores, 0, sizeof(game.playerScores));
 }
 
+static void initExplosionShader() {
+    game.explosionShader = LoadShader(NULL, "shaders/explosions.fs");
+
+    // Get shader uniform locations
+    game.timeLoc = GetShaderLocation(game.explosionShader, "time");
+    game.colorLoc = GetShaderLocation(game.explosionShader, "color");
+}
+
 static void initGame() {
     loadHiScore();
     loadTextures();
+    initExplosionShader();
     loadSounds();
     game.font = LoadFontEx("fonts/LiberationMono.ttf", 40, NULL, 0);
     game.explosionAnimations[ETBullet] =
@@ -1117,6 +1205,39 @@ static void initGame() {
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 4};
     game.powerUpSpecs[PUShield] =
         (PowerUpSpec){.texture = &game.textures.powerups, .texCol = 5};
+}
+
+static void createParticleExplosion(Vector2 pos, float maxRadius,
+                                    float duration, Color color) {
+    for (int i = 0; i < MAX_PARTICLE_EXPLOSIONS; i++) {
+        if (!game.pexplosions[i].active) {
+            // Vector2 center = {pos.x + maxRadius, pos.y + maxRadius};
+            game.pexplosions[i] =
+                (ParticleExplosion){.shader = game.explosionShader,
+                                    .time = 0,
+                                    .position = pos,
+                                    .radius = 0,
+                                    .maxRadius = maxRadius,
+                                    .duration = duration,
+                                    .color = color,
+                                    .active = true};
+            break;
+        }
+    }
+}
+
+static void updateParticleExplosions() {
+    for (int i = 0; i < MAX_PARTICLE_EXPLOSIONS; i++) {
+        ParticleExplosion *e = &game.pexplosions[i];
+        if (!e->active) continue;
+
+        e->time += game.frameTime;
+        e->radius = e->maxRadius * (e->time / e->duration);
+
+        if (e->time >= e->duration) {
+            e->active = false;
+        }
+    }
 }
 
 static void fireBullet(Tank *t) {
@@ -1279,14 +1400,20 @@ static void createScorePopup(int texCol, Vector2 targetPos, int targetSize) {
 
 static void createExplosion(ExplosionType type, Vector2 targetPos,
                             int targetSize, int scorePopupTexCol) {
-    int explosionSize = game.explosionAnimations[type].textures[0].width * 2;
-    int offset = (explosionSize - targetSize) / 2;
+    float radius = type == ETBullet ? 32.0f : 64.0f;
+    float duration =
+        type == ETBullet ? BULLET_EXPLOSION_TTL : BIG_EXPLOSION_TTL;
+    Color color =
+        type == ETBullet ? (Color){255, 200, 0, 255} : (Color){255, 80, 0, 255};
+
+    createParticleExplosion((Vector2){targetPos.x + targetSize / 2.0,
+                                      targetPos.y + targetSize / 2.0},
+                            radius, duration, color);
+
+    // Keep score popup functionality
     for (int i = 0; i < MAX_EXPLOSION_COUNT; i++) {
         if (game.explosions[i].ttl <= 0) {
-            game.explosions[i].ttl = game.explosionAnimations[type].duration;
-            game.explosions[i].type = type;
-            game.explosions[i].pos =
-                (Vector2){targetPos.x - offset, targetPos.y - offset};
+            game.explosions[i].ttl = duration;
             game.explosions[i].scorePopupTexCol = scorePopupTexCol;
             break;
         }
@@ -2102,6 +2229,7 @@ static void gameLogic() {
     handleInput();
     handleAI();
     updateGameState();
+    updateParticleExplosions();
 }
 
 static void saveHiScore() {
@@ -2151,7 +2279,7 @@ static void playMusic() {
 int main(void) {
     srand(time(0));
 
-    SetTraceLogLevel(LOG_NONE);
+    // SetTraceLogLevel(LOG_NONE);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
     SetTargetFPS(60);
 
@@ -2160,7 +2288,7 @@ int main(void) {
 
     int display = GetCurrentMonitor();
     SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
-    ToggleFullscreen();
+    // ToggleFullscreen();
 
     InitAudioDevice();
 
@@ -2191,7 +2319,7 @@ int main(void) {
     }
 
     UnloadFont(game.font);
-
+    UnloadShader(game.explosionShader);
     saveHiScore();
 
     CloseAudioDevice();
