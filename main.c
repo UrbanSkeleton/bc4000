@@ -113,7 +113,7 @@ const Vector2 SCORE_POPUP_SIZE = (Vector2){16 * 4, 9 * 4};
 const float SCORE_POPUP_TTL = 0.5;
 const short BULLET_SPEEDS[3] = {450, 550, 600};
 const int BULLET_SIZE = 16;
-const float BULLET_EXPLOSION_TTL = 0.2f;
+const float BULLET_EXPLOSION_TTL = 0.4f;
 const float BIG_EXPLOSION_TTL = 0.4f;
 const float ENEMY_SPAWN_INTERVAL = 3.0f;
 const float SPAWNING_TIME = 0.7f;
@@ -575,7 +575,8 @@ static void drawParticleExplosions() {
         ParticleExplosion *e = &game.pexplosions[i];
         if (!e->active || e->effectType != 0) continue;
 
-        SetShaderValue(game.explosionShader, game.timeLoc, &e->time,
+        float time = (e->time / e->duration);
+        SetShaderValue(game.explosionShader, game.timeLoc, &time,
                        SHADER_UNIFORM_FLOAT);
         float color[4] = {
             (float)e->color.r / 255.0f, (float)e->color.g / 255.0f,
@@ -1135,12 +1136,13 @@ static void initTrailShader() {
 }
 
 static void initExplosionShader() {
-    game.explosionShader = LoadShader(NULL, "shaders/explosions.fs");
+    // game.explosionShader = LoadShader(NULL, "shaders/explosion.fs");
+    game.explosionShader = LoadShader(NULL, "shaders/volumetric_explosion.fs");
 
     // Get shader uniform locations
-    game.timeLoc = GetShaderLocation(game.explosionShader, "time");
-    game.colorLoc = GetShaderLocation(game.explosionShader, "color");
-    game.positionLoc = GetShaderLocation(game.explosionShader, "position");
+    game.timeLoc = GetShaderLocation(game.explosionShader, "iTime");
+    // game.colorLoc = GetShaderLocation(game.explosionShader, "color");
+    // game.positionLoc = GetShaderLocation(game.explosionShader, "position");
 }
 
 static void initGame() {
