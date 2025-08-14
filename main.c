@@ -6,7 +6,7 @@
 #include "utils.c"
 
 // #define DRAW_CELL_GRID
-#define ALT_ASSETS
+// #define ALT_ASSETS
 
 #ifdef ALT_ASSETS
 #define ASSETDIR "alt"
