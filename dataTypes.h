@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "constants.h"
+#include "networkHeaders.h"
 #include "raylib.h"
 
 typedef struct {
@@ -264,9 +265,27 @@ typedef enum { GMOnePlayer, GMTwoPlayers, GMLan } GameMode;
 
 typedef enum { LServer, LClient } LanMode;
 
+// typedef struct {
+//     struct sockaddr_in serverAddress, clientAdress;
+//     socklen_t addressLen = sizeof(clientAdress);
+// } LanServer;
+
+// typedef struct {
+//     struct sockaddr_in broadcastAddress, clientAdress, serverAddress;
+//     socklen_t addressLen = sizeof(clientAdress);
+// } LanClient;
+
+typedef int Socket;
+
 typedef struct {
     LanMode lanMode;
-} LanInfo;
+    Socket socket;
+    struct sockaddr_in broadcastAddress, clientAddress, serverAddress;
+    socklen_t addressLength;
+    int availableGames;
+    int selectedAddressIndex;
+    struct sockaddr_in joinableAddresses[MAX_AVAILABLE_GAMES];
+} Lan;
 
 typedef enum {
     GSTitle,
@@ -314,7 +333,7 @@ typedef struct {
     void (*draw)();
     Title title;
     LanMenu lanMenu;
-    LanInfo lanInfo;
+    Lan lan;
     StageSummary stageSummary;
     GameMode mode;
     float stageCurtainTime;

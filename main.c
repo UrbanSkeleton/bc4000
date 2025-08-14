@@ -4,6 +4,7 @@
 
 #include "constants.h"
 #include "dataTypes.h"
+#include "networkHeaders.h"
 #include "raylib.h"
 #include "utils.h"
 
@@ -31,8 +32,10 @@ static void drawCongrats();
 static void saveHiScore();
 static void lanMenuLogic();
 static void drawLanMenu();
+static void initHostGame();
 static void hostGameLogic();
 static void drawHostGame();
+static void initJoinGame();
 static void joinGameLogic();
 static void drawJoinGame();
 
@@ -1705,12 +1708,14 @@ static void lanMenuLogic() {
     if (IsKeyPressed(KEY_ENTER)) {
         switch (game.lanMenu.lanMenuSelectedItem) {
             case LMHostGame:
-                game.lanInfo.lanMode = LServer;
+                game.lan.lanMode = LServer;
                 setScreen(GSHostGame);
+                initHostGame();
                 break;
             case LMJoinGame:
-                game.lanInfo.lanMode = LClient;
+                game.lan.lanMode = LClient;
                 setScreen(GSJoinGame);
+                initJoinGame();
                 break;
             default:
                 return;
@@ -1734,13 +1739,188 @@ static void drawLanMenu() {
              game.lanMenu.lanMenuSelectedItem == LMJoinGame ? RED : WHITE);
 }
 
-static void hostGameLogic() {}
+static void initHostGame() {
+    game.lan.addressLength = sizeof(game.lan.clientAddress);
 
-static void drawHostGame() {}
+    if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket failed");
+        exit(1);
+    }
 
-static void joinGameLogic() {}
+    fcntl(game.lan.socket, F_SETFL,
+          fcntl(game.lan.socket, F_GETFL, 0) | O_NONBLOCK);
 
-static void drawJoinGame() {}
+    int opt = 1;
+    setsockopt(game.lan.socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(game.lan.socket, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
+
+    memset(&game.lan.serverAddress, 0, sizeof(game.lan.serverAddress));
+    game.lan.serverAddress.sin_family = AF_INET;
+    game.lan.serverAddress.sin_addr.s_addr = INADDR_ANY;
+    game.lan.serverAddress.sin_port = htons(DISCOVERY_PORT);
+
+    if (bind(game.lan.socket, (struct sockaddr *)&game.lan.serverAddress,
+             sizeof(game.lan.serverAddress)) < 0) {
+        perror("Bind failed");
+        exit(1);
+    }
+
+    printf("Server is running on port %d\n", DISCOVERY_PORT);
+}
+
+static void hostGameLogic() {
+    char buffer[BUFFER_SIZE];
+
+    // checks all new packets in order.
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                         (struct sockaddr *)&game.lan.clientAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+
+        buffer[n] = '\0';
+
+        if (strcmp(buffer, "DISCOVER") == 0) {
+            char reply[] = "AVAILABLE";
+            sendto(game.lan.socket, reply, strlen(reply), 0,
+                   (struct sockaddr *)&game.lan.clientAddress,
+                   game.lan.addressLength);
+            printf("Sent GAME_AVAILABLE to %s\n",
+                   inet_ntoa(game.lan.clientAddress.sin_addr));
+        } else if (strcmp(buffer, "JOIN_REQUEST") == 0) {
+            char reply[] = "JOIN_ACCEPT";
+            sendto(game.lan.socket, reply, strlen(reply), 0,
+                   (struct sockaddr *)&game.lan.clientAddress,
+                   game.lan.addressLength);
+            printf("%s wants to join your game, sending join accept message\n",
+                   inet_ntoa(game.lan.clientAddress.sin_addr));
+        }
+    }
+}
+
+static void drawHostGame() {
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "Waiting for player...");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
+             SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, WHITE);
+}
+
+static void discoverGames() {
+    memset(game.lan.joinableAddresses, 0, sizeof(game.lan.joinableAddresses));
+    game.lan.availableGames = 0;
+    game.lan.selectedAddressIndex = -1;
+
+    char msg[] = "DISCOVER";
+    sendto(game.lan.socket, msg, strlen(msg), 0,
+           (struct sockaddr *)&game.lan.broadcastAddress,
+           game.lan.addressLength);
+
+    printf("Discovering joinable games...\n");
+}
+
+static void initJoinGame() {
+    game.lan.addressLength = sizeof(game.lan.clientAddress);
+    if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket failed");
+        exit(1);
+    }
+
+    fcntl(game.lan.socket, F_SETFL,
+          fcntl(game.lan.socket, F_GETFL, 0) | O_NONBLOCK);
+
+    int opt = 1;
+    setsockopt(game.lan.socket, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
+
+    memset(&game.lan.broadcastAddress, 0, sizeof(game.lan.broadcastAddress));
+    game.lan.broadcastAddress.sin_family = AF_INET;
+    game.lan.broadcastAddress.sin_port = htons(DISCOVERY_PORT);
+    inet_pton(AF_INET, BROADCAST_IP, &game.lan.broadcastAddress.sin_addr);
+
+    discoverGames();
+}
+
+static bool foundGame() {
+    if (game.lan.availableGames < MAX_AVAILABLE_GAMES) {
+        game.lan.availableGames++;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+static void joinGameLogic() {
+    char buffer[BUFFER_SIZE];
+
+    // checks all new packets in order.
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                         (struct sockaddr *)&game.lan.serverAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+
+        buffer[n] = '\0';
+
+        if (strcmp(buffer, "AVAILABLE") == 0) {
+            printf("Found available game from %s\n",
+                   inet_ntoa(game.lan.serverAddress.sin_addr));
+            if (foundGame()) {
+                game.lan.joinableAddresses[game.lan.availableGames - 1] =
+                    game.lan.serverAddress;
+            }
+        } else if (strcmp(buffer, "JOIN_ACCEPT") == 0) {
+            printf("%s has accepted your join request, joining game now\n",
+                   inet_ntoa(game.lan.serverAddress.sin_addr));
+        }
+    }
+
+    if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+        game.lan.selectedAddressIndex++;
+        if (game.lan.selectedAddressIndex >= game.lan.availableGames)
+            game.lan.selectedAddressIndex = -1;
+    }
+
+    if (IsKeyPressed(KEY_ENTER)) {
+        if (game.lan.selectedAddressIndex == -1) {
+            discoverGames();
+        } else {
+            char msg[] = "JOIN_REQUEST";
+            sendto(game.lan.socket, msg, strlen(msg), 0,
+                   (struct sockaddr *)&game.lan
+                       .joinableAddresses[game.lan.selectedAddressIndex],
+                   game.lan.addressLength);
+        }
+    }
+}
+
+static void drawJoinGame() {
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "Finding games");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)), 100,
+             FONT_SIZE * 1.5, WHITE);
+
+    int y = 400;
+    snprintf(text, N, "Refresh");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
+             game.lan.selectedAddressIndex == -1 ? RED : WHITE);
+
+    for (int i = 0; i < game.lan.availableGames; i++) {
+        y += 80;
+        snprintf(text, N, "Game: %s",
+                 inet_ntoa(game.lan.joinableAddresses[i].sin_addr));
+        drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
+                 game.lan.selectedAddressIndex == i ? RED : WHITE);
+    }
+}
 
 static void gameLogic() {
     if (!game.stageCurtainTime) {
@@ -1858,8 +2038,8 @@ int main(void) {
         LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
-    ToggleFullscreen();
+    SetWindowSize(GetMonitorWidth(display) / 2, GetMonitorHeight(display) / 2);
+    // ToggleFullscreen();
 
     InitAudioDevice();
 
