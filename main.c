@@ -2,8 +2,10 @@
 #include <string.h>
 #include <time.h>
 
+#include "constants.h"
+#include "dataTypes.h"
 #include "raylib.h"
-#include "utils.c"
+#include "utils.h"
 
 // #define DRAW_CELL_GRID
 // #define ALT_ASSETS
@@ -27,380 +29,23 @@ static void drawGameOverCurtain();
 static void congratsLogic();
 static void drawCongrats();
 static void saveHiScore();
-
-#define ASIZE(a) (sizeof(a) / sizeof(a[0]))
-
-typedef struct {
-    int row;
-    int col;
-} CellInfo;
-
-const CellInfo fortressWall[] = {
-    {13 * 4 - 6 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 2 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 2 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 2 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 3 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 3 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 3 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 8 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 8 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 8 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 9 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 9 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 9 + 4},
-
-    {13 * 4 - 6 + 2, 6 * 4 + 0 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 0 + 4},
-    {13 * 4 - 6 + 2, 6 * 4 + 1 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 1 + 4},
-
-    {13 * 4 - 6 + 2, 6 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 2 + 4},
-    {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
-};
-
-const int LEVEL_COUNT = 35;
-const float SLIDING_TIME = 0.6;
-const int FONT_SIZE = 40;
-const float TITLE_SLIDE_TIME = 1;
-const float IMMOBILE_TIME = 5;
-const float GAME_OVER_SLIDE_TIME = 1;
-const float STAGE_END_TIME = 3;
-const float GAME_OVER_DELAY = 3;
-const float STAGE_CURTAIN_TIME = 2;
-const float STAGE_SUMMARY_SLIDE_TIME = 0.001;
-const float TIMER_TIME = 15.0;
-const float SHIELD_TIME = 15.0;
-const float SHOVEL_TIME = 15.0;
-const int POWERUP_SCORE = 500;
-const int MAX_POWERUP_COUNT = 3;
-const int STAGE_COUNT = 16;
-const int FIELD_COLS = 64;
-const int FIELD_ROWS = 56;
-const int CELL_SIZE = 16;
-const int SCREEN_WIDTH = FIELD_COLS * CELL_SIZE;
-const int SCREEN_HEIGHT = FIELD_ROWS * CELL_SIZE;
-const int SNAP_TO = CELL_SIZE * 2;
-const int TANK_SIZE = CELL_SIZE * 4;
-const int TANK_TEXTURE_SIZE = 16;
-const int FLAG_SIZE = TANK_SIZE;
-const Vector2 POWER_UP_TEXTURE_SIZE = {30, 28};
-const int POWER_UP_SIZE = CELL_SIZE * 4;
-const int SPAWN_TEXTURE_SIZE = 32;
-const int UI_TANK_TEXTURE_SIZE = 14;
-const int UI_TANK_SIZE = CELL_SIZE * 2;
-const int PLAYER1_START_COL = 4 * 4 + 4;
-const int PLAYER2_START_COL = 4 * 8 + 4;
-const Vector2 PLAYER1_START_POS = {CELL_SIZE * PLAYER1_START_COL,
-                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
-const Vector2 PLAYER2_START_POS = {CELL_SIZE * PLAYER2_START_COL,
-                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
-const int PLAYER_SPEED = 220;
-const short ENEMY_SPEEDS[3] = {140, 170, 240};
-const int MAX_ENEMY_COUNT = 20;
-const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
-const int MAX_BULLET_COUNT = 100;
-const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
-const int MAX_SCORE_POPUP_COUNT = MAX_BULLET_COUNT;
-const Vector2 SCORE_POPUP_TEXTURE_SIZE = (Vector2){16, 9};
-const Vector2 SCORE_POPUP_SIZE = (Vector2){16 * 4, 9 * 4};
-const float SCORE_POPUP_TTL = 0.5;
-const short BULLET_SPEEDS[3] = {450, 550, 600};
-const int BULLET_SIZE = 16;
-const float BULLET_EXPLOSION_TTL = 0.2f;
-const float BIG_EXPLOSION_TTL = 0.4f;
-const float ENEMY_SPAWN_INTERVAL = 3.0f;
-const float SPAWNING_TIME = 0.7f;
-const int POWERUP_POSITIONS_COUNT = 16;
-const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE}};
-
-typedef enum {
-    TPlayer1,
-    TPlayer2,
-    TBasic,
-    TFast,
-    TPower,
-    TArmor,
-    TMax
-} TankType;
-typedef enum { TSPending, TSSpawning, TSActive, TSDead } TankStatus;
-typedef enum { DLeft, DRight, DUp, DDown } Direction;
-typedef enum {
-    UIFlag,
-    UIPlayer1,
-    UIPlayer2,
-    UIP1Tank,
-    UIP1Lifes,
-    UIP2Tank,
-    UIP2Lifes,
-    UIStageLowDigit,
-    UIStageHiDigit,
-    UIMax
-} UIElementType;
-
-typedef struct {
-    int totalScore;
-    int kills[TMax];
-} PlayerScore;
-
-typedef struct {
-    Texture2D *texture;
-    Rectangle textureSrc;
-    Vector2 pos;
-    Vector2 size;
-    Vector2 drawSize;
-    bool isVisible;
-} UIElement;
-
-typedef struct {
-    Texture2D *texture;
-    Texture2D *powerUpTexture;
-    short speed;
-    short bulletSpeed;
-    char maxBulletCount;
-    bool isEnemy;
-    short points;
-    char texRow;
-    char lifes;
-} TankSpec;
-
-typedef enum {
-    PUStar,
-    PUTank,
-    PUGrenade,
-    PUTimer,
-    PUShield,
-    PUShovel,
-    PUMax,
-} PowerUpType;
-
-typedef struct {
-    Texture2D *texture;
-    int texCol;
-} PowerUpSpec;
-
-typedef struct {
-    PowerUpType type;
-    Vector2 pos;
-    enum { PUSPending, PUSActive, PUSPickedUp } state;
-} PowerUp;
-
-typedef struct {
-    TankType type;
-    Vector2 pos;
-    Direction direction;
-    char texColOffset;
-    char firedBulletCount;
-    TankStatus status;
-    float spawningTime;
-    bool isMoving;
-    char lifes;
-    PowerUp *powerUp;
-    char tier;
-    float shieldTimeLeft;
-    float immobileTimeLeft;
-    float slidingTimeLeft;
-} Tank;
-
-typedef struct {
-    bool fire;
-    bool move;
-    Direction direction;
-} Command;
-
-typedef struct {
-    float duration;
-    Texture2D *textures;
-    char textureCount;
-} Animation;
-
-typedef enum { ETBullet, ETBig, ETMax } ExplosionType;
-
-typedef struct {
-    ExplosionType type;
-    Vector2 pos;
-    float ttl;
-    float maxTtl;
-    int scorePopupTexCol;
-} Explosion;
-
-typedef struct {
-    int texCol;
-    Vector2 pos;
-    float ttl;
-} ScorePopup;
-
-typedef enum { BTNone, BTTank } BulletType;
-
-typedef struct {
-    Vector2 pos;
-    Vector2 speed;
-    Direction direction;
-    BulletType type;
-    Tank *tank;
-} Bullet;
-
-typedef enum {
-    CTBorder,
-    CTBlank,
-    CTBrick,
-    CTConcrete,
-    CTForest,
-    CTRiver,
-    CTIce,
-    CTMax
-} CellType;
-
-typedef struct {
-    CellType type;
-    Vector2 pos;
-    char texRow;
-    char texCol;
-} Cell;
-
-typedef struct {
-    Texture2D *texture;
-    bool isSolid;
-    bool isPassable;
-} CellSpec;
-
-typedef struct {
-    Texture2D flag;
-    Texture2D deadFlag;
-    Texture2D brick;
-    Texture2D border;
-    Texture2D concrete;
-    Texture2D forest;
-    Texture2D river[2];
-    Texture2D blank;
-    Texture2D player1Tank;
-    Texture2D player2Tank;
-    Texture2D enemies;
-    Texture2D enemiesWithPowerUps;
-    Texture2D bullet;
-    Texture2D bulletExplosions[3];
-    Texture2D bigExplosions[5];
-    Texture2D spawningTank;
-    Texture2D uiFlag;
-    Texture2D ui;
-    Texture2D digits;
-    Texture2D powerups;
-    Texture2D shield;
-    Texture2D ice;
-    Texture2D title;
-    Texture2D leftArrow;
-    Texture2D rightArrow;
-    Texture2D gameOver;
-    Texture2D gameOverCurtain;
-    Texture2D pause;
-    Texture2D scores;
-} Textures;
-
-typedef struct {
-    Sound big_explosion;
-    Sound bullet_explosion;
-    Sound bullet_hit_1;
-    Sound bullet_hit_2;
-    Sound game_over;
-    Sound game_pause;
-    Sound mode_switch;
-    Sound player_fire;
-    Sound powerup_appear;
-    Sound powerup_pick;
-    Sound start_menu;
-    Sound soundtrack[21];
-} Sounds;
-
-typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
-
-typedef struct {
-    float time;
-    MenuSelectedItem menuSelecteItem;
-} Title;
-
-typedef struct {
-    float time;
-} StageSummary;
-
-typedef enum { GMOnePlayer, GMTwoPlayers } GameMode;
-
-typedef enum { GSTitle, GSPlay, GSScore, GSGameOver, GSCongrats } GameScreen;
-
-typedef struct {
-    void (*logic)(void);
-    void (*draw)(void);
-} GameFunctions;
+static void lanMenuLogic();
+static void drawLanMenu();
+static void hostGameLogic();
+static void drawHostGame();
+static void joinGameLogic();
+static void drawJoinGame();
 
 static GameFunctions gameFunctions[] = {
     {.logic = titleLogic, .draw = drawTitle},
+    {.logic = lanMenuLogic, .draw = drawLanMenu},
+    {.logic = hostGameLogic, .draw = drawHostGame},
+    {.logic = joinGameLogic, .draw = drawJoinGame},
     {.logic = gameLogic, .draw = drawGame},
     {.logic = stageSummaryLogic, .draw = drawStageSummary},
     {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
     {.logic = congratsLogic, .draw = drawCongrats},
 };
-
-typedef struct {
-    Cell field[FIELD_ROWS][FIELD_COLS];
-    Tank tanks[MAX_TANK_COUNT];
-    TankSpec tankSpecs[TMax];
-    Bullet bullets[MAX_BULLET_COUNT];
-    Vector2 flagPos;
-    bool isFlagDead;
-    CellSpec cellSpecs[CTMax];
-    PowerUpSpec powerUpSpecs[PUMax];
-    Animation explosionAnimations[ETMax];
-    Explosion explosions[MAX_EXPLOSION_COUNT];
-    ScorePopup scorePopups[MAX_SCORE_POPUP_COUNT];
-    Textures textures;
-    Sounds sounds;
-    float frameTime;
-    float totalTime;
-    float timeSinceSpawn;
-    char activeEnemyCount;
-    char pendingEnemyCount;
-    char maxActiveEnemyCount;
-    char stage;
-    UIElement uiElements[UIMax];
-    PlayerScore playerScores[2];
-    PowerUp powerUps[MAX_POWERUP_COUNT];
-    float timerPowerUpTimeLeft;
-    float shovelPowerUpTimeLeft;
-    void (*logic)();
-    void (*draw)();
-    Title title;
-    StageSummary stageSummary;
-    GameMode mode;
-    float stageCurtainTime;
-    float gameOverTime;
-    float stageEndTime;
-    bool isStageCurtainSoundPlayed;
-    bool isPaused;
-    int hiScore;
-    GameScreen screen;
-    char soundtrackPhase;
-    char soundtrack;
-    bool isDieSoundtrackPlayed;
-    Font font;
-} Game;
 
 static Game game;
 
@@ -2001,15 +1646,22 @@ static void titleLogic() {
             case MTwoPlayers:
                 game.mode = GMTwoPlayers;
                 break;
+            case MLan:
+                game.mode = GMLan;
+                printf("Gamemode set to LAN\n");
+                break;
             default:
                 game.title.time = TITLE_SLIDE_TIME;
                 return;
-                ;
         }
         game.title = (Title){0};
-        setScreen(GSPlay);
-        initGameRun();
-        initStage(1);
+        if (game.mode == GMLan) {
+            setScreen(GSLan);
+        } else {
+            setScreen(GSPlay);
+            initGameRun();
+            initStage(1);
+        }
     }
 }
 
@@ -2042,6 +1694,53 @@ static void drawTitle() {
             (Vector2){}, 0, WHITE);
     }
 }
+
+static void lanMenuLogic() {
+    if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+        PlaySound(game.sounds.mode_switch);
+        game.lanMenu.lanMenuSelectedItem =
+            game.lanMenu.lanMenuSelectedItem % (LMMax - 1) + 1;
+    }
+
+    if (IsKeyPressed(KEY_ENTER)) {
+        switch (game.lanMenu.lanMenuSelectedItem) {
+            case LMHostGame:
+                game.lanInfo.lanMode = LServer;
+                setScreen(GSHostGame);
+                break;
+            case LMJoinGame:
+                game.lanInfo.lanMode = LClient;
+                setScreen(GSJoinGame);
+                break;
+            default:
+                return;
+        }
+    }
+}
+
+static void drawLanMenu() {
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "LAN MODE:");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 2)), 70, FONT_SIZE * 2,
+             WHITE);
+
+    snprintf(text, N, "HOST GAME");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 500, FONT_SIZE,
+             game.lanMenu.lanMenuSelectedItem == LMHostGame ? RED : WHITE);
+
+    snprintf(text, N, "JOIN GAME");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 650, FONT_SIZE,
+             game.lanMenu.lanMenuSelectedItem == LMJoinGame ? RED : WHITE);
+}
+
+static void hostGameLogic() {}
+
+static void drawHostGame() {}
+
+static void joinGameLogic() {}
+
+static void drawJoinGame() {}
 
 static void gameLogic() {
     if (!game.stageCurtainTime) {
