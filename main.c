@@ -4,6 +4,7 @@
 
 #include "constants.h"
 #include "dataTypes.h"
+#include "gamePackager.h"
 #include "networkHeaders.h"
 #include "raylib.h"
 #include "utils.h"
@@ -1739,6 +1740,37 @@ static void drawLanMenu() {
              game.lanMenu.lanMenuSelectedItem == LMJoinGame ? RED : WHITE);
 }
 
+static void initServer() {
+    close(game.lan.socket);
+
+    game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (game.lan.socket < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    fcntl(game.lan.socket, F_SETFL,
+          fcntl(game.lan.socket, F_GETFL, 0) | O_NONBLOCK);
+
+    int opt = 1;
+    setsockopt(game.lan.socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    memset(&game.lan.serverAddress, 0, sizeof(game.lan.serverAddress));
+    game.lan.serverAddress.sin_family = AF_INET;
+    game.lan.serverAddress.sin_addr.s_addr = INADDR_ANY;
+    game.lan.serverAddress.sin_port = htons(GAME_PORT);
+
+    if (bind(game.lan.socket, (struct sockaddr *)&game.lan.serverAddress,
+             sizeof(game.lan.serverAddress)) < 0) {
+        perror("bind");
+        exit(1);
+    }
+
+    printf("Server is running on port %d, will send to %s:%d\n", GAME_PORT,
+           inet_ntoa(game.lan.clientAddress.sin_addr),
+           ntohs(game.lan.clientAddress.sin_port));
+}
+
 static void initHostGame() {
     game.lan.addressLength = sizeof(game.lan.clientAddress);
 
@@ -1798,8 +1830,16 @@ static void hostGameLogic() {
                    game.lan.addressLength);
             printf("%s wants to join your game, sending join accept message\n",
                    inet_ntoa(game.lan.clientAddress.sin_addr));
+            setScreen(GSPlay);
+            initGameRun();
+            initServer();
+            initStage(1);
         }
     }
+    // setScreen(GSPlay);
+    // initGameRun();
+    // initServer();
+    // initStage(1);
 }
 
 static void drawHostGame() {
@@ -1808,6 +1848,15 @@ static void drawHostGame() {
     snprintf(text, N, "Waiting for player...");
     drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
              SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, WHITE);
+}
+
+static void initClient() {
+    game.lan.serverAddress.sin_family = AF_INET;
+    game.lan.serverAddress.sin_port = htons(GAME_PORT);
+
+    printf("Client will talk to server %s:%d from local port %d\n",
+           inet_ntoa(game.lan.serverAddress.sin_addr), GAME_PORT,
+           ntohs(((struct sockaddr_in *)&game.lan.serverAddress)->sin_port));
 }
 
 static void discoverGames() {
@@ -1879,6 +1928,10 @@ static void joinGameLogic() {
         } else if (strcmp(buffer, "JOIN_ACCEPT") == 0) {
             printf("%s has accepted your join request, joining game now\n",
                    inet_ntoa(game.lan.serverAddress.sin_addr));
+            setScreen(GSPlay);
+            initGameRun();
+            initClient();
+            initStage(1);
         }
     }
 
@@ -1923,6 +1976,23 @@ static void drawJoinGame() {
 }
 
 static void gameLogic() {
+    if (game.lan.lanMode == LClient) {
+        char buffer[MAX_PACKET_SIZE + 1];
+        while (true) {
+            int n = recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+                             (struct sockaddr *)&game.lan.serverAddress,
+                             &game.lan.addressLength);
+            if (n < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+                perror("recvfrom");
+                break;
+            }
+            buffer[n] = '\0';
+            unpackGameState(&game, buffer);
+        }
+        return;
+    }
+
     if (!game.stageCurtainTime) {
         if (IsKeyPressed(KEY_ENTER)) {
             game.stageCurtainTime = 0.001;
@@ -1981,6 +2051,15 @@ static void gameLogic() {
     handleInput();
     handleAI();
     updateGameState();
+
+    if (game.mode == GMLan) {
+        char buffer[MAX_PACKET_SIZE];
+        packGameState(&game, buffer);
+
+        sendto(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+               (struct sockaddr *)&game.lan.clientAddress,
+               game.lan.addressLength);
+    }
 }
 
 static void saveHiScore() {
