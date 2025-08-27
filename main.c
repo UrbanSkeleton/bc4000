@@ -21,6 +21,7 @@
 #endif
 
 static void gameLogic();
+static void lanGameLogic();
 static void drawGame();
 static void stageSummaryLogic();
 static void drawStageSummary();
@@ -46,6 +47,7 @@ static GameFunctions gameFunctions[] = {
     {.logic = hostGameLogic, .draw = drawHostGame},
     {.logic = joinGameLogic, .draw = drawJoinGame},
     {.logic = gameLogic, .draw = drawGame},
+    {.logic = lanGameLogic, .draw = drawGame},
     {.logic = stageSummaryLogic, .draw = drawStageSummary},
     {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
     {.logic = congratsLogic, .draw = drawCongrats},
@@ -517,7 +519,7 @@ static void initUIElements() {
                         .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                         .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
     }
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         game.uiElements[UIPlayer2] =
             (UIElement){.isVisible = true,
                         .texture = &game.textures.ui,
@@ -627,7 +629,7 @@ static void initStage(char stage) {
     }
     loadStage(game.stage);
     spawnPlayer(&game.tanks[TPlayer1], false);
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         spawnPlayer(&game.tanks[TPlayer2], false);
     }
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
@@ -1161,6 +1163,27 @@ static void handlePlayerInput(TankType type) {
     handleCommand(&game.tanks[type], cmd);
 }
 
+static void handleClientInput(TankType type) {
+    Command cmd = {};
+    if (game.lan.clientInput[0]) {
+        cmd.move = true;
+        cmd.direction = DRight;
+    } else if (game.lan.clientInput[1]) {
+        cmd.move = true;
+        cmd.direction = DLeft;
+    } else if (game.lan.clientInput[2]) {
+        cmd.move = true;
+        cmd.direction = DUp;
+    } else if (game.lan.clientInput[3]) {
+        cmd.move = true;
+        cmd.direction = DDown;
+    }
+    if (game.lan.clientInput[4]) {
+        cmd.fire = true;
+    }
+    handleCommand(&game.tanks[type], cmd);
+}
+
 static void setScreen(GameScreen s) {
     game.screen = s;
     game.logic = gameFunctions[s].logic;
@@ -1176,6 +1199,8 @@ static void handleInput() {
     handlePlayerInput(TPlayer1);
     if (game.mode == GMTwoPlayers) {
         handlePlayerInput(TPlayer2);
+    } else if (game.mode == GMLan) {
+        handleClientInput(TPlayer2);
     }
 }
 
@@ -1526,7 +1551,10 @@ static void stageSummaryLogic() {
             setScreen(GSCongrats);
         } else {
             initStage(game.stage + 1);
-            setScreen(GSPlay);
+            if (game.mode == GMLan)
+                setScreen(GSPlayLan);
+            else
+                setScreen(GSPlay);
         }
     }
 }
@@ -1563,7 +1591,7 @@ static void drawStageSummary() {
              topY + (FONT_SIZE + linePadding) * 2, FONT_SIZE,
              (Color){241, 159, 80, 255});
 
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         int pX = (halfWidth - measureText("II-PLAYER", FONT_SIZE)) / 2;
         drawText("II-PLAYER", halfWidth + pX, topY + FONT_SIZE + linePadding,
                  FONT_SIZE, (Color){205, 62, 26, 255});
@@ -1605,7 +1633,7 @@ static void drawStageSummary() {
                  kills);
         drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100, y,
                  FONT_SIZE, WHITE);
-        if (game.mode == GMTwoPlayers) {
+        if (game.mode == GMTwoPlayers || game.mode == GMLan) {
             DrawTexturePro(game.textures.rightArrow,
                            (Rectangle){0, 0, arrowWidth, arrowHeight},
                            (Rectangle){halfWidth + (drawSize / 2) + 10,
@@ -1623,7 +1651,7 @@ static void drawStageSummary() {
     snprintf(text, N, "TOTAL %2d", player1TotalKills);
     drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100,
              topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE, WHITE);
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         snprintf(text, N, "%2d", player2TotalKills);
         drawText(text, halfWidth + 100,
                  topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE,
@@ -1692,7 +1720,7 @@ static void drawTitle() {
         DrawTexturePro(
             *tex, (Rectangle){texX, 0, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
             (Rectangle){x + 150,
-                        topY + titleTexHeight * 2 - 110 +
+                        topY + titleTexHeight * 2 - 174 +
                             (game.title.menuSelecteItem - 1) * 60,
                         TANK_TEXTURE_SIZE * 4, TANK_TEXTURE_SIZE * 4},
             (Vector2){}, 0, WHITE);
@@ -1740,37 +1768,6 @@ static void drawLanMenu() {
              game.lanMenu.lanMenuSelectedItem == LMJoinGame ? RED : WHITE);
 }
 
-static void initServer() {
-    close(game.lan.socket);
-
-    game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (game.lan.socket < 0) {
-        perror("socket");
-        exit(1);
-    }
-
-    fcntl(game.lan.socket, F_SETFL,
-          fcntl(game.lan.socket, F_GETFL, 0) | O_NONBLOCK);
-
-    int opt = 1;
-    setsockopt(game.lan.socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    memset(&game.lan.serverAddress, 0, sizeof(game.lan.serverAddress));
-    game.lan.serverAddress.sin_family = AF_INET;
-    game.lan.serverAddress.sin_addr.s_addr = INADDR_ANY;
-    game.lan.serverAddress.sin_port = htons(GAME_PORT);
-
-    if (bind(game.lan.socket, (struct sockaddr *)&game.lan.serverAddress,
-             sizeof(game.lan.serverAddress)) < 0) {
-        perror("bind");
-        exit(1);
-    }
-
-    printf("Server is running on port %d, will send to %s:%d\n", GAME_PORT,
-           inet_ntoa(game.lan.clientAddress.sin_addr),
-           ntohs(game.lan.clientAddress.sin_port));
-}
-
 static void initHostGame() {
     game.lan.addressLength = sizeof(game.lan.clientAddress);
 
@@ -1789,7 +1786,7 @@ static void initHostGame() {
     memset(&game.lan.serverAddress, 0, sizeof(game.lan.serverAddress));
     game.lan.serverAddress.sin_family = AF_INET;
     game.lan.serverAddress.sin_addr.s_addr = INADDR_ANY;
-    game.lan.serverAddress.sin_port = htons(DISCOVERY_PORT);
+    game.lan.serverAddress.sin_port = htons(PORT);
 
     if (bind(game.lan.socket, (struct sockaddr *)&game.lan.serverAddress,
              sizeof(game.lan.serverAddress)) < 0) {
@@ -1797,7 +1794,7 @@ static void initHostGame() {
         exit(1);
     }
 
-    printf("Server is running on port %d\n", DISCOVERY_PORT);
+    printf("Server is running on port %d\n", PORT);
 }
 
 static void hostGameLogic() {
@@ -1830,15 +1827,13 @@ static void hostGameLogic() {
                    game.lan.addressLength);
             printf("%s wants to join your game, sending join accept message\n",
                    inet_ntoa(game.lan.clientAddress.sin_addr));
-            setScreen(GSPlay);
+            setScreen(GSPlayLan);
             initGameRun();
-            initServer();
             initStage(1);
         }
     }
     // setScreen(GSPlay);
     // initGameRun();
-    // initServer();
     // initStage(1);
 }
 
@@ -1848,15 +1843,6 @@ static void drawHostGame() {
     snprintf(text, N, "Waiting for player...");
     drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
              SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, WHITE);
-}
-
-static void initClient() {
-    game.lan.serverAddress.sin_family = AF_INET;
-    game.lan.serverAddress.sin_port = htons(GAME_PORT);
-
-    printf("Client will talk to server %s:%d from local port %d\n",
-           inet_ntoa(game.lan.serverAddress.sin_addr), GAME_PORT,
-           ntohs(((struct sockaddr_in *)&game.lan.serverAddress)->sin_port));
 }
 
 static void discoverGames() {
@@ -1887,7 +1873,7 @@ static void initJoinGame() {
 
     memset(&game.lan.broadcastAddress, 0, sizeof(game.lan.broadcastAddress));
     game.lan.broadcastAddress.sin_family = AF_INET;
-    game.lan.broadcastAddress.sin_port = htons(DISCOVERY_PORT);
+    game.lan.broadcastAddress.sin_port = htons(PORT);
     inet_pton(AF_INET, BROADCAST_IP, &game.lan.broadcastAddress.sin_addr);
 
     discoverGames();
@@ -1928,9 +1914,8 @@ static void joinGameLogic() {
         } else if (strcmp(buffer, "JOIN_ACCEPT") == 0) {
             printf("%s has accepted your join request, joining game now\n",
                    inet_ntoa(game.lan.serverAddress.sin_addr));
-            setScreen(GSPlay);
+            setScreen(GSPlayLan);
             initGameRun();
-            initClient();
             initStage(1);
         }
     }
@@ -1976,23 +1961,6 @@ static void drawJoinGame() {
 }
 
 static void gameLogic() {
-    if (game.lan.lanMode == LClient) {
-        char buffer[MAX_PACKET_SIZE + 1];
-        while (true) {
-            int n = recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
-                             (struct sockaddr *)&game.lan.serverAddress,
-                             &game.lan.addressLength);
-            if (n < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-                perror("recvfrom");
-                break;
-            }
-            buffer[n] = '\0';
-            unpackGameState(&game, buffer);
-        }
-        return;
-    }
-
     if (!game.stageCurtainTime) {
         if (IsKeyPressed(KEY_ENTER)) {
             game.stageCurtainTime = 0.001;
@@ -2051,14 +2019,72 @@ static void gameLogic() {
     handleInput();
     handleAI();
     updateGameState();
+}
 
-    if (game.mode == GMLan) {
-        char buffer[MAX_PACKET_SIZE];
-        packGameState(&game, buffer);
+static void lanGameClient() {
+    char buffer[MAX_PACKET_SIZE + 1];
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+                         (struct sockaddr *)&game.lan.serverAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+        buffer[n] = '\0';
+        unpackGameState(&game, buffer);
+    }
 
-        sendto(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
-               (struct sockaddr *)&game.lan.clientAddress,
-               game.lan.addressLength);
+    memset(game.lan.clientInput, 0, CLIENT_INPUT_SIZE);
+
+    if (IsKeyDown(controls[0].right)) game.lan.clientInput[0] = 1;
+    if (IsKeyDown(controls[0].left)) game.lan.clientInput[1] = 1;
+    if (IsKeyDown(controls[0].up)) game.lan.clientInput[2] = 1;
+    if (IsKeyDown(controls[0].down)) game.lan.clientInput[3] = 1;
+    if (IsKeyPressed(controls[0].fire)) game.lan.clientInput[4] = 1;
+    if (IsKeyPressed(KEY_ENTER)) game.lan.clientInput[5] = 1;
+
+    sendto(game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
+           (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
+}
+
+static void lanGameServerSend() {
+    char buffer[MAX_PACKET_SIZE];
+    packGameState(&game, buffer);
+
+    sendto(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+           (struct sockaddr *)&game.lan.clientAddress, game.lan.addressLength);
+}
+
+static void lanGameServerRecieve() {
+    char buffer[BUFFER_SIZE];
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                         (struct sockaddr *)&game.lan.clientAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+        buffer[n] = '\0';
+        memcpy(game.lan.clientInput, buffer, CLIENT_INPUT_SIZE);
+    }
+}
+
+static void lanGameLogic() {
+    if (game.lan.lanMode == LServer) {
+        lanGameServerRecieve();
+    } else {
+        lanGameClient();
+        return;
+    }
+
+    gameLogic();
+
+    if (game.lan.lanMode == LServer) {
+        lanGameServerSend();
     }
 }
 

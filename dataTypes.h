@@ -101,10 +101,12 @@ typedef struct {
     int texCol;
 } PowerUpSpec;
 
+typedef enum { PUSPending, PUSActive, PUSPickedUp } PowerUpState;
+
 typedef struct {
     PowerUpType type;
     Vector2 pos;
-    enum { PUSPending, PUSActive, PUSPickedUp } state;
+    PowerUpState state;
 } PowerUp;
 
 typedef struct {
@@ -285,6 +287,7 @@ typedef struct {
     int availableGames;
     int selectedAddressIndex;
     struct sockaddr_in joinableAddresses[MAX_AVAILABLE_GAMES];
+    char clientInput[CLIENT_INPUT_SIZE];
 } Lan;
 
 typedef enum {
@@ -293,6 +296,7 @@ typedef enum {
     GSHostGame,
     GSJoinGame,
     GSPlay,
+    GSPlayLan,
     GSScore,
     GSGameOver,
     GSCongrats

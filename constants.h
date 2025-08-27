@@ -77,10 +77,10 @@ const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
     {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
     {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE}};
 
-#define DISCOVERY_PORT 5000
-#define GAME_PORT 5001
+#define PORT 5000
 #define BROADCAST_IP "255.255.255.255"
 #define BUFFER_SIZE 256
+#define CLIENT_INPUT_SIZE 6
 
 const int MAX_AVAILABLE_GAMES = 4;
 
