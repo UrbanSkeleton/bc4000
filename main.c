@@ -2033,7 +2033,11 @@ static void lanGameClient() {
             break;
         }
         buffer[n] = '\0';
-        unpackGameState(&game, buffer);
+        GameStatePacket packet = unpackGameState(&game, buffer);
+        updatePlayerLifesUI();
+        if (game.screen != packet.screen) {
+            setScreen(packet.screen);
+        }
     }
 
     memset(game.lan.clientInput, 0, CLIENT_INPUT_SIZE);
@@ -2083,9 +2087,7 @@ static void lanGameLogic() {
 
     gameLogic();
 
-    if (game.lan.lanMode == LServer) {
-        lanGameServerSend();
-    }
+    lanGameServerSend();
 }
 
 static void saveHiScore() {
@@ -2143,8 +2145,8 @@ int main(void) {
         LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display) / 2, GetMonitorHeight(display) / 2);
-    // ToggleFullscreen();
+    SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
+    ToggleFullscreen();
 
     InitAudioDevice();
 

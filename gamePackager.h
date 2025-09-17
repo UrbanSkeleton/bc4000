@@ -39,6 +39,7 @@ typedef struct {
     uint16_t x;
     uint16_t y;
     uint8_t ttl;
+    uint8_t maxTtl;
 } GameStateExplosion;
 
 typedef struct {
@@ -48,6 +49,9 @@ typedef struct {
     GameStatePowerUp powerUps[MAX_POWERUP_COUNT];
     GameStateExplosion explosions[MAX_EXPLOSION_COUNT];
     uint8_t stageCurtainTime;
+    uint8_t pendingEnemyCount;
+    uint8_t lifes[2];
+    uint8_t screen;
 } GameStatePacket;
 
 const int MAX_PACKET_SIZE = sizeof(GameStatePacket);
@@ -93,7 +97,8 @@ static void packExplosion(Explosion* explosion,
     gameStateExplosion->type = (uint8_t)explosion->type;
     gameStateExplosion->x = (uint16_t)explosion->pos.x;
     gameStateExplosion->y = (uint16_t)explosion->pos.y;
-    gameStateExplosion->ttl = (uint8_t)(explosion->ttl * 256);
+    gameStateExplosion->ttl = (uint8_t)(explosion->ttl * 64);
+    // gameStateExplosion->maxTtl = (uint8_t)(explosion->maxTtl * 64);
 }
 
 static size_t packGameState(Game* game, char* buffer) {
@@ -117,7 +122,13 @@ static size_t packGameState(Game* game, char* buffer) {
     }
 
     packField(game->field, packet.field);
+
     packet.stageCurtainTime = (game->stageCurtainTime * 64.0);
+    packet.pendingEnemyCount = game->pendingEnemyCount;
+    packet.lifes[0] = game->tanks[0].lifes;
+    packet.lifes[1] = game->tanks[1].lifes;
+    packet.screen = game->screen;
+
     memcpy(buffer, &packet, sizeof(packet));
 
     return sizeof(packet);
@@ -165,9 +176,10 @@ static void unpackExplosion(Explosion* explosion,
     explosion->type = (ExplosionType)gameStateExplosion->type;
     explosion->pos.x = (float)gameStateExplosion->x;
     explosion->pos.y = (float)gameStateExplosion->y;
-    explosion->ttl = (float)(gameStateExplosion->ttl / 256.0);
+    explosion->ttl = (float)(gameStateExplosion->ttl / 64.0);
+    // explosion->maxTtl = (float)(gameStateExplosion->maxTtl / 64.0);
 }
-static void unpackGameState(Game* game, char* buffer) {
+static GameStatePacket unpackGameState(Game* game, char* buffer) {
     GameStatePacket packet;
     memcpy(&packet, buffer, sizeof(packet));
 
@@ -188,7 +200,13 @@ static void unpackGameState(Game* game, char* buffer) {
     }
 
     unpackField(game->field, packet.field);
+
     game->stageCurtainTime = ((float)packet.stageCurtainTime) / 64.0;
+    game->pendingEnemyCount = packet.pendingEnemyCount;
+    game->tanks[0].lifes = packet.lifes[0];
+    game->tanks[1].lifes = packet.lifes[1];
+
+    return packet;
 }
 
 #endif
