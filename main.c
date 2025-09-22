@@ -2145,8 +2145,8 @@ int main(void) {
         LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
-    ToggleFullscreen();
+    SetWindowSize(GetMonitorWidth(display) / 2, GetMonitorHeight(display) / 2);
+    // ToggleFullscreen();
 
     InitAudioDevice();
 
