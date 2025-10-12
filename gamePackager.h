@@ -51,6 +51,9 @@ typedef struct {
     uint8_t stageCurtainTime;
     uint8_t pendingEnemyCount;
     uint8_t lifes[2];
+    float stageSummaryTime;
+    int hiScore;
+    uint8_t stage;
     uint8_t screen;
 } GameStatePacket;
 
@@ -127,6 +130,9 @@ static size_t packGameState(Game* game, char* buffer) {
     packet.pendingEnemyCount = game->pendingEnemyCount;
     packet.lifes[0] = game->tanks[0].lifes;
     packet.lifes[1] = game->tanks[1].lifes;
+    packet.hiScore = game->hiScore;
+    packet.stage = game->stage;
+    packet.stageSummaryTime = game->stageSummary.time;
     packet.screen = game->screen;
 
     memcpy(buffer, &packet, sizeof(packet));
@@ -205,6 +211,9 @@ static GameStatePacket unpackGameState(Game* game, char* buffer) {
     game->pendingEnemyCount = packet.pendingEnemyCount;
     game->tanks[0].lifes = packet.lifes[0];
     game->tanks[1].lifes = packet.lifes[1];
+    game->hiScore = packet.hiScore;
+    game->stage = packet.stage;
+    game->stageSummary.time = packet.stageSummaryTime;
 
     return packet;
 }

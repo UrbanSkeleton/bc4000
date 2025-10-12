@@ -24,6 +24,7 @@ static void gameLogic();
 static void lanGameLogic();
 static void drawGame();
 static void stageSummaryLogic();
+static void lanStageSummaryLogic();
 static void drawStageSummary();
 static void titleLogic();
 static void drawTitle();
@@ -49,6 +50,7 @@ static GameFunctions gameFunctions[] = {
     {.logic = gameLogic, .draw = drawGame},
     {.logic = lanGameLogic, .draw = drawGame},
     {.logic = stageSummaryLogic, .draw = drawStageSummary},
+    {.logic = lanStageSummaryLogic, .draw = drawStageSummary},
     {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
     {.logic = congratsLogic, .draw = drawCongrats},
 };
@@ -1192,7 +1194,10 @@ static void setScreen(GameScreen s) {
 
 static void handleInput() {
     if (game.gameOverTime > 0 && IsKeyPressed(KEY_ENTER)) {
-        setScreen(GSScore);
+        if (game.screen == GSPlayLan)
+            setScreen(GSScoreLan);
+        else
+            setScreen(GSScore);
         return;
     }
     if (game.gameOverTime > 0) return;
@@ -1300,7 +1305,10 @@ static void checkStageEnd() {
     }
     if (game.stageEndTime >= STAGE_END_TIME ||
         game.gameOverTime >= GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
-        setScreen(GSScore);
+        if (game.screen == GSPlayLan) {
+            setScreen(GSScoreLan);
+        } else
+            setScreen(GSScore);
     }
 }
 
@@ -2086,6 +2094,19 @@ static void lanGameLogic() {
     }
 
     gameLogic();
+
+    lanGameServerSend();
+}
+
+static void lanStageSummaryLogic() {
+    if (game.lan.lanMode == LServer) {
+        lanGameServerRecieve();
+    } else {
+        lanGameClient();
+        return;
+    }
+
+    stageSummaryLogic();
 
     lanGameServerSend();
 }

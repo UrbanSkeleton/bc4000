@@ -298,8 +298,9 @@ typedef enum {
     GSPlay,
     GSPlayLan,
     GSScore,
+    GSScoreLan,
     GSGameOver,
-    GSCongrats
+    GSCongrats,
 } GameScreen;
 
 typedef struct {
