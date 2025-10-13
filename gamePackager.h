@@ -44,11 +44,19 @@ typedef struct {
 } GameStateExplosion;
 
 typedef struct {
+    uint8_t texCol;
+    uint16_t x;
+    uint16_t y;
+    uint8_t ttl;
+} GameStateScorePopup;
+
+typedef struct {
     GameStateTank tanks[MAX_TANK_COUNT];
     GameStateBullet bullets[MAX_BULLET_COUNT];
     GameStateCell field[FIELD_ROWS][FIELD_COLS];
     GameStatePowerUp powerUps[MAX_POWERUP_COUNT];
     GameStateExplosion explosions[MAX_EXPLOSION_COUNT];
+    GameStateScorePopup scorePopups[MAX_SCORE_POPUP_COUNT];
     uint8_t stageCurtainTime;
     uint8_t gameOverTime;
     uint8_t pendingEnemyCount;
@@ -57,6 +65,8 @@ typedef struct {
     int hiScore;
     uint8_t stage;
     uint8_t screen;
+    PlayerScore playerScores[2];
+    bool isPaused;
 } GameStatePacket;
 
 const int MAX_PACKET_SIZE = sizeof(GameStatePacket);
@@ -108,6 +118,14 @@ static void packExplosion(Explosion* explosion,
     // gameStateExplosion->maxTtl = (uint8_t)(explosion->maxTtl * 64);
 }
 
+static void packScorePopup(ScorePopup* scorePopup,
+                           GameStateScorePopup* gameStateScorePopup) {
+    gameStateScorePopup->texCol = (uint8_t)scorePopup->texCol;
+    gameStateScorePopup->x = (uint16_t)scorePopup->pos.x;
+    gameStateScorePopup->y = (uint16_t)scorePopup->pos.y;
+    gameStateScorePopup->ttl = (uint8_t)(scorePopup->ttl * 64);
+}
+
 static size_t packGameState(Game* game, char* buffer) {
     GameStatePacket packet;
     memset(&packet, 0, sizeof(packet));
@@ -128,6 +146,10 @@ static size_t packGameState(Game* game, char* buffer) {
         packExplosion(&game->explosions[i], &packet.explosions[i]);
     }
 
+    for (int i = 0; i < MAX_SCORE_POPUP_COUNT; i++) {
+        packScorePopup(&game->scorePopups[i], &packet.scorePopups[i]);
+    }
+
     packField(game->field, packet.field);
 
     packet.stageCurtainTime = (game->stageCurtainTime * 64.0);
@@ -139,6 +161,10 @@ static size_t packGameState(Game* game, char* buffer) {
     packet.stage = game->stage;
     packet.stageSummaryTime = game->stageSummary.time;
     packet.screen = game->screen;
+    packet.isPaused = game->isPaused;
+
+    packet.playerScores[0] = game->playerScores[0];
+    packet.playerScores[1] = game->playerScores[1];
 
     memcpy(buffer, &packet, sizeof(packet));
 
@@ -192,6 +218,16 @@ static void unpackExplosion(Explosion* explosion,
     explosion->ttl = (float)(gameStateExplosion->ttl / 64.0);
     // explosion->maxTtl = (float)(gameStateExplosion->maxTtl / 64.0);
 }
+
+static void unpackScorePopup(ScorePopup* scorePopup,
+                             GameStateScorePopup* gameStateScorePopup) {
+    scorePopup->texCol = (int)gameStateScorePopup->texCol;
+    scorePopup->pos.x = (float)gameStateScorePopup->x;
+    scorePopup->pos.y = (float)gameStateScorePopup->y;
+    printf("%d, %f\n", gameStateScorePopup->x, scorePopup->pos.x);
+    scorePopup->ttl = (float)(gameStateScorePopup->ttl / 64.0);
+}
+
 static GameStatePacket unpackGameState(Game* game, char* buffer) {
     GameStatePacket packet;
     memcpy(&packet, buffer, sizeof(packet));
@@ -212,6 +248,10 @@ static GameStatePacket unpackGameState(Game* game, char* buffer) {
         unpackExplosion(&game->explosions[i], &packet.explosions[i]);
     }
 
+    for (int i = 0; i < MAX_SCORE_POPUP_COUNT; i++) {
+        unpackScorePopup(&game->scorePopups[i], &packet.scorePopups[i]);
+    }
+
     unpackField(game->field, packet.field);
 
     game->stageCurtainTime = ((float)packet.stageCurtainTime) / 64.0;
@@ -221,6 +261,10 @@ static GameStatePacket unpackGameState(Game* game, char* buffer) {
     game->tanks[1].lifes = packet.lifes[1];
     game->hiScore = packet.hiScore;
     game->stageSummary.time = packet.stageSummaryTime;
+    game->isPaused = packet.isPaused;
+
+    game->playerScores[0] = packet.playerScores[0];
+    game->playerScores[1] = packet.playerScores[1];
 
     return packet;
 }

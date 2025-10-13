@@ -2073,6 +2073,9 @@ static void lanGameServerSend() {
 }
 
 static void lanGameServerRecieve() {
+    bool fire = false;
+    bool enter = false;
+
     char buffer[BUFFER_SIZE];
     while (true) {
         int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
@@ -2085,7 +2088,12 @@ static void lanGameServerRecieve() {
         }
         buffer[n] = '\0';
         memcpy(game.lan.clientInput, buffer, CLIENT_INPUT_SIZE);
+        if (game.lan.clientInput[4]) fire = true;  // prevents loss of data
+        if (game.lan.clientInput[5]) enter = true;
     }
+
+    game.lan.clientInput[4] = fire;
+    game.lan.clientInput[5] = enter;
 
     game.proceed |= game.lan.clientInput[5];  // client pressed enter
 }
