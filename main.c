@@ -2058,7 +2058,7 @@ static void lanGameClient() {
     if (IsKeyDown(controls[0].up)) game.lan.clientInput[2] = 1;
     if (IsKeyDown(controls[0].down)) game.lan.clientInput[3] = 1;
     if (IsKeyPressed(controls[0].fire)) game.lan.clientInput[4] = 1;
-    if (IsKeyDown(KEY_ENTER)) game.lan.clientInput[5] = 1;
+    if (IsKeyPressed(KEY_ENTER)) game.lan.clientInput[5] = 1;
 
     sendto(game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
            (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
