@@ -42,7 +42,7 @@ const Vector2 PLAYER2_START_POS = {CELL_SIZE * PLAYER2_START_COL,
                                    CELL_SIZE *(FIELD_ROWS - 4 - 2)};
 const int PLAYER_SPEED = 220;
 const short ENEMY_SPEEDS[3] = {140, 170, 240};
-const int MAX_ENEMY_COUNT = 1;
+const int MAX_ENEMY_COUNT = 20;
 const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
 const int MAX_BULLET_COUNT = 100;
 const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;

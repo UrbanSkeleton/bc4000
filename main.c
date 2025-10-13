@@ -10,7 +10,7 @@
 #include "utils.h"
 
 // #define DRAW_CELL_GRID
-// #define ALT_ASSETS
+#define ALT_ASSETS
 
 #ifdef ALT_ASSETS
 #define ASSETDIR "alt"
@@ -1770,6 +1770,9 @@ static void lanMenuLogic() {
                 setScreen(GSJoinGame);
                 initJoinGame();
                 break;
+            case LMBack:
+                setScreen(GSTitle);
+                break;
             default:
                 return;
         }
@@ -1784,12 +1787,16 @@ static void drawLanMenu() {
              WHITE);
 
     snprintf(text, N, "HOST GAME");
-    drawText(text, centerX(measureText(text, FONT_SIZE)), 500, FONT_SIZE,
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 450, FONT_SIZE,
              game.lanMenu.lanMenuSelectedItem == LMHostGame ? RED : WHITE);
 
     snprintf(text, N, "JOIN GAME");
-    drawText(text, centerX(measureText(text, FONT_SIZE)), 650, FONT_SIZE,
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 550, FONT_SIZE,
              game.lanMenu.lanMenuSelectedItem == LMJoinGame ? RED : WHITE);
+
+    snprintf(text, N, "BACK");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 650, FONT_SIZE,
+             game.lanMenu.lanMenuSelectedItem == LMBack ? RED : WHITE);
 }
 
 static void initHostGame() {
@@ -1947,10 +1954,13 @@ static void joinGameLogic() {
     if (IsKeyPressed(KEY_LEFT_SHIFT)) {
         game.lan.selectedAddressIndex++;
         if (game.lan.selectedAddressIndex >= game.lan.availableGames)
-            game.lan.selectedAddressIndex = -1;
+            game.lan.selectedAddressIndex = -2;
     }
 
     if (game.proceed) {
+        if (game.lan.selectedAddressIndex == -2) {
+            setScreen(GSLan);
+        }
         if (game.lan.selectedAddressIndex == -1) {
             discoverGames();
         } else {
@@ -1966,12 +1976,12 @@ static void joinGameLogic() {
 static void drawJoinGame() {
     static const int N = 256;
     char text[N];
-    snprintf(text, N, "Finding games");
-    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)), 100,
+    snprintf(text, N, "FINDING GAMES");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)), 80,
              FONT_SIZE * 1.5, WHITE);
 
     int y = 400;
-    snprintf(text, N, "Refresh");
+    snprintf(text, N, "REFRESH");
     drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
              game.lan.selectedAddressIndex == -1 ? RED : WHITE);
 
@@ -1982,6 +1992,11 @@ static void drawJoinGame() {
         drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
                  game.lan.selectedAddressIndex == i ? RED : WHITE);
     }
+
+    y += 100;
+    snprintf(text, N, "BACK");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
+             game.lan.selectedAddressIndex == -2 ? RED : WHITE);
 }
 
 static void gameLogic() {
@@ -2200,8 +2215,8 @@ int main(void) {
         LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display) / 2, GetMonitorHeight(display) / 2);
-    // ToggleFullscreen();
+    SetWindowSize(GetMonitorWidth(display) / 1, GetMonitorHeight(display) / 1);
+    ToggleFullscreen();
 
     InitAudioDevice();
 

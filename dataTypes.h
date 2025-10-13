@@ -257,6 +257,7 @@ typedef enum {
     LMNone,
     LMHostGame,
     LMJoinGame,
+    LMBack,
     LMMax,
 } LanMenuSelectedItem;
 
