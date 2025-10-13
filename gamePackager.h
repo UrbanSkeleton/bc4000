@@ -11,6 +11,7 @@ typedef struct {
     uint16_t y;
     uint8_t direction;
     uint8_t status;
+    uint8_t spawningTime;
     uint8_t shieldTimeLeft;
     uint8_t immobileTimeLeft;
     uint8_t texColOffset;
@@ -49,6 +50,7 @@ typedef struct {
     GameStatePowerUp powerUps[MAX_POWERUP_COUNT];
     GameStateExplosion explosions[MAX_EXPLOSION_COUNT];
     uint8_t stageCurtainTime;
+    uint8_t gameOverTime;
     uint8_t pendingEnemyCount;
     uint8_t lifes[2];
     float stageSummaryTime;
@@ -65,6 +67,8 @@ static void packTank(Tank* tank, GameStateTank* gameStateTank) {
     gameStateTank->y = (uint16_t)tank->pos.y;
     gameStateTank->direction = (uint8_t)tank->direction;
     gameStateTank->status = (uint8_t)tank->status;
+    gameStateTank->spawningTime =
+        (uint8_t)(tank->spawningTime * 256.0 / SPAWNING_TIME);
     gameStateTank->shieldTimeLeft =
         (uint8_t)MAX(0, (tank->shieldTimeLeft * 256.0 / SHIELD_TIME));
     gameStateTank->immobileTimeLeft =
@@ -127,6 +131,7 @@ static size_t packGameState(Game* game, char* buffer) {
     packField(game->field, packet.field);
 
     packet.stageCurtainTime = (game->stageCurtainTime * 64.0);
+    packet.gameOverTime = (game->gameOverTime * 64.0);
     packet.pendingEnemyCount = game->pendingEnemyCount;
     packet.lifes[0] = game->tanks[0].lifes;
     packet.lifes[1] = game->tanks[1].lifes;
@@ -146,6 +151,8 @@ static void unpackTank(Tank* tank, GameStateTank* gameStateTank) {
     tank->pos.y = (float)gameStateTank->y;
     tank->direction = (Direction)gameStateTank->direction;
     tank->status = (TankStatus)gameStateTank->status;
+    tank->spawningTime =
+        (float)gameStateTank->spawningTime / 256.0 * SPAWNING_TIME;
     tank->shieldTimeLeft =
         (float)(gameStateTank->shieldTimeLeft) / 256.0 * SHIELD_TIME;
     tank->immobileTimeLeft =
@@ -208,11 +215,11 @@ static GameStatePacket unpackGameState(Game* game, char* buffer) {
     unpackField(game->field, packet.field);
 
     game->stageCurtainTime = ((float)packet.stageCurtainTime) / 64.0;
+    game->gameOverTime = ((float)packet.gameOverTime) / 64.0;
     game->pendingEnemyCount = packet.pendingEnemyCount;
     game->tanks[0].lifes = packet.lifes[0];
     game->tanks[1].lifes = packet.lifes[1];
     game->hiScore = packet.hiScore;
-    game->stage = packet.stage;
     game->stageSummary.time = packet.stageSummaryTime;
 
     return packet;

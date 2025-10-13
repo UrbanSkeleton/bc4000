@@ -1193,7 +1193,7 @@ static void setScreen(GameScreen s) {
 }
 
 static void handleInput() {
-    if (game.gameOverTime > 0 && IsKeyPressed(KEY_ENTER)) {
+    if (game.gameOverTime > 0 && game.proceed) {
         if (game.screen == GSPlayLan)
             setScreen(GSScoreLan);
         else
@@ -1504,7 +1504,7 @@ static void updateGameState() {
 // }
 
 static void gameOverCurtainLogic() {
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         setScreen(GSTitle);
     }
 }
@@ -1521,7 +1521,7 @@ static void drawGameOverCurtain() {
 }
 
 static void congratsLogic() {
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         setScreen(GSTitle);
     }
 }
@@ -1549,7 +1549,7 @@ static void drawCongrats() {
 
 static void stageSummaryLogic() {
     game.stageSummary.time += game.frameTime;
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         if (game.gameOverTime) {
 #ifndef ALT_ASSETS
             PlaySound(game.sounds.game_over);
@@ -1678,7 +1678,7 @@ static void titleLogic() {
         game.title.time = TITLE_SLIDE_TIME;
         game.title.menuSelecteItem =
             game.title.menuSelecteItem % (MMax - 1) + 1;
-    } else if (IsKeyPressed(KEY_ENTER)) {
+    } else if (game.proceed) {
         switch (game.title.menuSelecteItem) {
             case MOnePlayer:
                 game.mode = GMOnePlayer;
@@ -1742,7 +1742,7 @@ static void lanMenuLogic() {
             game.lanMenu.lanMenuSelectedItem % (LMMax - 1) + 1;
     }
 
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         switch (game.lanMenu.lanMenuSelectedItem) {
             case LMHostGame:
                 game.lan.lanMode = LServer;
@@ -1934,7 +1934,7 @@ static void joinGameLogic() {
             game.lan.selectedAddressIndex = -1;
     }
 
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         if (game.lan.selectedAddressIndex == -1) {
             discoverGames();
         } else {
@@ -1970,7 +1970,7 @@ static void drawJoinGame() {
 
 static void gameLogic() {
     if (!game.stageCurtainTime) {
-        if (IsKeyPressed(KEY_ENTER)) {
+        if (game.proceed) {
             game.stageCurtainTime = 0.001;
         }
     }
@@ -1982,7 +1982,7 @@ static void gameLogic() {
         game.stageCurtainTime += game.frameTime;
     }
     if (game.stageCurtainTime < STAGE_CURTAIN_TIME) return;
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         game.isPaused = !game.isPaused;
         if (game.isPaused) {
             PlaySound(game.sounds.game_pause);
@@ -2046,6 +2046,9 @@ static void lanGameClient() {
         if (game.screen != packet.screen) {
             setScreen(packet.screen);
         }
+        if (game.stage != packet.stage) {
+            initStage(packet.stage);
+        }
     }
 
     memset(game.lan.clientInput, 0, CLIENT_INPUT_SIZE);
@@ -2055,7 +2058,7 @@ static void lanGameClient() {
     if (IsKeyDown(controls[0].up)) game.lan.clientInput[2] = 1;
     if (IsKeyDown(controls[0].down)) game.lan.clientInput[3] = 1;
     if (IsKeyPressed(controls[0].fire)) game.lan.clientInput[4] = 1;
-    if (IsKeyPressed(KEY_ENTER)) game.lan.clientInput[5] = 1;
+    if (IsKeyDown(KEY_ENTER)) game.lan.clientInput[5] = 1;
 
     sendto(game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
            (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
@@ -2083,6 +2086,8 @@ static void lanGameServerRecieve() {
         buffer[n] = '\0';
         memcpy(game.lan.clientInput, buffer, CLIENT_INPUT_SIZE);
     }
+
+    game.proceed |= game.lan.clientInput[5];  // client pressed enter
 }
 
 static void lanGameLogic() {
@@ -2166,8 +2171,8 @@ int main(void) {
         LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
-    ToggleFullscreen();
+    SetWindowSize(GetMonitorWidth(display) / 2, GetMonitorHeight(display) / 2);
+    // ToggleFullscreen();
 
     InitAudioDevice();
 
@@ -2175,10 +2180,15 @@ int main(void) {
     setScreen(GSTitle);
 
     SetExitKey(0);
+
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
 
+        game.proceed = false;
+        if (IsKeyPressed(KEY_ENTER)) game.proceed = true;
+
         game.logic();
+
         BeginTextureMode(renderTexture);
         ClearBackground(BLACK);
         game.draw();

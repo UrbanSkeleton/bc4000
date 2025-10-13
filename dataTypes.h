@@ -352,6 +352,7 @@ typedef struct {
     char soundtrack;
     bool isDieSoundtrackPlayed;
     Font font;
+    bool proceed;
 } Game;
 
 #endif
