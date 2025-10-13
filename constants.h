@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 
+const int MAX_SFX_PLAYED = 4;
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
 const int FONT_SIZE = 40;

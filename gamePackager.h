@@ -67,6 +67,7 @@ typedef struct {
     uint8_t screen;
     PlayerScore playerScores[2];
     bool isPaused;
+    SfxType sfxPlayed[MAX_SFX_PLAYED];
 } GameStatePacket;
 
 const int MAX_PACKET_SIZE = sizeof(GameStatePacket);
@@ -166,6 +167,10 @@ static size_t packGameState(Game* game, char* buffer) {
     packet.playerScores[0] = game->playerScores[0];
     packet.playerScores[1] = game->playerScores[1];
 
+    for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+        packet.sfxPlayed[i] = game->sfxPlayed[i];
+    }
+
     memcpy(buffer, &packet, sizeof(packet));
 
     return sizeof(packet);
@@ -224,7 +229,6 @@ static void unpackScorePopup(ScorePopup* scorePopup,
     scorePopup->texCol = (int)gameStateScorePopup->texCol;
     scorePopup->pos.x = (float)gameStateScorePopup->x;
     scorePopup->pos.y = (float)gameStateScorePopup->y;
-    printf("%d, %f\n", gameStateScorePopup->x, scorePopup->pos.x);
     scorePopup->ttl = (float)(gameStateScorePopup->ttl / 64.0);
 }
 
@@ -265,6 +269,10 @@ static GameStatePacket unpackGameState(Game* game, char* buffer) {
 
     game->playerScores[0] = packet.playerScores[0];
     game->playerScores[1] = packet.playerScores[1];
+
+    for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+        game->sfxPlayed[i] = packet.sfxPlayed[i];
+    }
 
     return packet;
 }

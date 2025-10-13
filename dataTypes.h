@@ -220,18 +220,23 @@ typedef struct {
     Texture2D scores;
 } Textures;
 
+typedef enum {
+    SFX_BIG_EXPLOSION,
+    SFX_BULLET_EXPLOSION,
+    SFX_BULLET_HIT_1,
+    SFX_BULLET_HIT_2,
+    SFX_GAME_OVER,
+    SFX_GAME_PAUSE,
+    SFX_MODE_SWITCH,
+    SFX_PLAYER_FIRE,
+    SFX_POWERUP_APPEAR,
+    SFX_POWERUP_PICK,
+    SFX_START_MENU,
+    SFX_MAX,
+} SfxType;
+
 typedef struct {
-    Sound big_explosion;
-    Sound bullet_explosion;
-    Sound bullet_hit_1;
-    Sound bullet_hit_2;
-    Sound game_over;
-    Sound game_pause;
-    Sound mode_switch;
-    Sound player_fire;
-    Sound powerup_appear;
-    Sound powerup_pick;
-    Sound start_menu;
+    Sound sfx[SFX_MAX];
     Sound soundtrack[21];
 } Sounds;
 
@@ -322,6 +327,7 @@ typedef struct {
     ScorePopup scorePopups[MAX_SCORE_POPUP_COUNT];
     Textures textures;
     Sounds sounds;
+    SfxType sfxPlayed[MAX_SFX_PLAYED];
     float frameTime;
     float totalTime;
     float timeSinceSpawn;
@@ -353,6 +359,7 @@ typedef struct {
     bool isDieSoundtrackPlayed;
     Font font;
     bool proceed;
+    bool mute;
 } Game;
 
 #endif

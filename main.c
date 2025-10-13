@@ -333,20 +333,23 @@ static void drawGame() {
 }
 
 static void loadSounds() {
-    game.sounds.big_explosion = LoadSound("sounds/big_explosion.ogg");
-    game.sounds.bullet_explosion = LoadSound("sounds/bullet_explosion.ogg");
-    game.sounds.bullet_hit_1 = LoadSound("sounds/bullet_hit_1.ogg");
-    game.sounds.bullet_hit_2 = LoadSound("sounds/bullet_hit_2.ogg");
-    game.sounds.game_over = LoadSound("sounds/game_over.ogg");
-    game.sounds.game_pause = LoadSound("sounds/game_pause.ogg");
-    game.sounds.mode_switch = LoadSound("sounds/mode_switch.ogg");
-    game.sounds.player_fire = LoadSound("sounds/player_fire.ogg");
-    game.sounds.powerup_appear = LoadSound("sounds/powerup_appear.ogg");
+    game.sounds.sfx[SFX_BIG_EXPLOSION] = LoadSound("sounds/big_explosion.ogg");
+    game.sounds.sfx[SFX_BULLET_EXPLOSION] =
+        LoadSound("sounds/bullet_explosion.ogg");
+    game.sounds.sfx[SFX_BULLET_HIT_1] = LoadSound("sounds/bullet_hit_1.ogg");
+    game.sounds.sfx[SFX_BULLET_HIT_2] = LoadSound("sounds/bullet_hit_2.ogg");
+    game.sounds.sfx[SFX_GAME_OVER] = LoadSound("sounds/game_over.ogg");
+    game.sounds.sfx[SFX_GAME_PAUSE] = LoadSound("sounds/game_pause.ogg");
+    game.sounds.sfx[SFX_MODE_SWITCH] = LoadSound("sounds/mode_switch.ogg");
+    game.sounds.sfx[SFX_PLAYER_FIRE] = LoadSound("sounds/player_fire.ogg");
+    game.sounds.sfx[SFX_POWERUP_APPEAR] =
+        LoadSound("sounds/powerup_appear.ogg");
 
-    game.sounds.powerup_pick =
+    game.sounds.sfx[SFX_POWERUP_PICK] =
         LoadSound("sounds/" ASSETDIR "/powerup_pick." SOUND_EXT);
-    game.sounds.start_menu =
+    game.sounds.sfx[SFX_START_MENU] =
         LoadSound("sounds/" ASSETDIR "/start_menu." SOUND_EXT);
+
 #ifdef ALT_ASSETS
     for (int track = 0; track <= 4; track++) {
         for (int phase = 0; phase <= 3; phase++) {
@@ -359,6 +362,20 @@ static void loadSounds() {
     game.sounds.soundtrack[ASIZE(game.sounds.soundtrack) - 1] =
         LoadSound("sounds/soundtrack/soundtrackDie.wav");
 #endif
+}
+
+static void playSound(Sound sound) {
+    if (!game.mute) PlaySound(sound);
+}
+
+static void playSfx(SfxType sfx) {
+    playSound(game.sounds.sfx[sfx]);
+    for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+        if (game.sfxPlayed[i] == SFX_MAX) {
+            game.sfxPlayed[i] = sfx;
+            break;
+        }
+    }
 }
 
 static void loadTextures() {
@@ -776,7 +793,7 @@ static void fireBullet(Tank *t) {
     if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount) return;
     t->firedBulletCount++;
     if (!isEnemy(t)) {
-        PlaySound(game.sounds.player_fire);
+        playSfx(SFX_PLAYER_FIRE);
     }
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
@@ -963,7 +980,7 @@ static void destroyAllTanks() {
         Tank *t = &game.tanks[i + 2];
         if (t->status == TSActive) destroyTank(t, false);
     }
-    PlaySound(game.sounds.bullet_explosion);
+    playSfx(SFX_BULLET_EXPLOSION);
 }
 
 static void addScore(TankType type, int score) {
@@ -986,7 +1003,7 @@ static void handlePowerUpHit(Tank *t) {
                       POWER_UP_SIZE - (powerUpHitboxOffset * 2),
                       POWER_UP_SIZE - (powerUpHitboxOffset * 2))) {
             p->state = PUSPickedUp;
-            PlaySound(game.sounds.powerup_pick);
+            playSfx(SFX_POWERUP_PICK);
             createScorePopup(4, p->pos, POWER_UP_SIZE);
             addScore(t->type, POWERUP_SCORE);
             switch (p->type) {
@@ -1224,24 +1241,24 @@ static void destroyBrick(int row, int col, bool destroyConcrete,
     switch (game.field[row][col].type) {
         case CTBorder:
             if (playSound) {
-                PlaySound(game.sounds.bullet_hit_1);
+                playSfx(SFX_BULLET_HIT_1);
             }
             break;
         case CTBrick:
             game.field[row][col].type = CTBlank;
             if (playSound) {
-                PlaySound(game.sounds.bullet_hit_2);
+                playSfx(SFX_BULLET_HIT_2);
             }
             break;
         case CTConcrete:
             if (destroyConcrete) {
                 game.field[row][col].type = CTBlank;
                 if (playSound) {
-                    PlaySound(game.sounds.bullet_hit_2);
+                    playSfx(SFX_BULLET_HIT_2);
                 }
             } else {
                 if (playSound) {
-                    PlaySound(game.sounds.bullet_hit_1);
+                    playSfx(SFX_BULLET_HIT_1);
                 }
             }
             break;
@@ -1333,10 +1350,10 @@ static void checkBulletHit(Bullet *b) {
         if (t->powerUp && t->powerUp->state == PUSPending) {
             t->powerUp->state = PUSActive;
             t->powerUp = NULL;
-            PlaySound(game.sounds.powerup_appear);
+            playSfx(SFX_POWERUP_APPEAR);
         }
         if (isEnemy(t) && t->lifes > 1) {
-            PlaySound(game.sounds.bullet_hit_1);
+            playSfx(SFX_BULLET_HIT_1);
             t->lifes--;
             break;
         }
@@ -1346,8 +1363,7 @@ static void checkBulletHit(Bullet *b) {
             addScore(b->tank->type, game.tankSpecs[t->type].points);
             game.playerScores[b->tank->type].kills[t->type]++;
         }
-        PlaySound(isEnemy(t) ? game.sounds.bullet_explosion
-                             : game.sounds.big_explosion);
+        playSfx(isEnemy(t) ? SFX_BULLET_EXPLOSION : SFX_BIG_EXPLOSION);
     }
 }
 
@@ -1376,7 +1392,7 @@ static bool checkFlagHit(Bullet *b) {
                   game.flagPos.y, FLAG_SIZE, FLAG_SIZE)) {
         destroyBullet(b, true);
         destroyFlag();
-        PlaySound(game.sounds.big_explosion);
+        playSfx(SFX_BIG_EXPLOSION);
         return true;
     }
     return false;
@@ -1552,7 +1568,7 @@ static void stageSummaryLogic() {
     if (game.proceed) {
         if (game.gameOverTime) {
 #ifndef ALT_ASSETS
-            PlaySound(game.sounds.game_over);
+            playSfx(SFX_GAME_OVER);
 #endif
             setScreen(GSGameOver);
         } else if (game.stage == LEVEL_COUNT) {
@@ -1674,7 +1690,7 @@ static void titleLogic() {
         game.title.menuSelecteItem = MOnePlayer;
     }
     if (IsKeyPressed(KEY_LEFT_SHIFT)) {
-        PlaySound(game.sounds.mode_switch);
+        playSfx(SFX_MODE_SWITCH);
         game.title.time = TITLE_SLIDE_TIME;
         game.title.menuSelecteItem =
             game.title.menuSelecteItem % (MMax - 1) + 1;
@@ -1737,7 +1753,7 @@ static void drawTitle() {
 
 static void lanMenuLogic() {
     if (IsKeyPressed(KEY_LEFT_SHIFT)) {
-        PlaySound(game.sounds.mode_switch);
+        playSfx(SFX_MODE_SWITCH);
         game.lanMenu.lanMenuSelectedItem =
             game.lanMenu.lanMenuSelectedItem % (LMMax - 1) + 1;
     }
@@ -1975,7 +1991,7 @@ static void gameLogic() {
         }
     }
     if (game.stageCurtainTime && !game.isStageCurtainSoundPlayed) {
-        PlaySound(game.sounds.start_menu);
+        playSfx(SFX_START_MENU);
         game.isStageCurtainSoundPlayed = true;
     }
     if (game.stageCurtainTime && game.stageCurtainTime < STAGE_CURTAIN_TIME) {
@@ -1985,7 +2001,7 @@ static void gameLogic() {
     if (game.proceed) {
         game.isPaused = !game.isPaused;
         if (game.isPaused) {
-            PlaySound(game.sounds.game_pause);
+            playSfx(SFX_GAME_PAUSE);
         }
     }
     if (game.isPaused) return;
@@ -2062,6 +2078,11 @@ static void lanGameClient() {
 
     sendto(game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
            (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
+
+    for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+        if (game.sfxPlayed[i] == SFX_MAX) break;
+        playSound(game.sounds.sfx[game.sfxPlayed[i]]);
+    }
 }
 
 static void lanGameServerSend() {
@@ -2143,14 +2164,14 @@ static void playMusic() {
     (game.sounds.soundtrack[ASIZE(game.sounds.soundtrack) - 1])
     if (isFirstTime) {
         isFirstTime = false;
-        PlaySound(game.sounds.soundtrack[0]);
+        playSound(game.sounds.soundtrack[0]);
         return;
     }
     if (game.gameOverTime) {
         if (IsSoundPlaying(dieSoundtrack)) return;
         if (!game.isDieSoundtrackPlayed) {
             StopSound(currentSoundtrack);
-            PlaySound(dieSoundtrack);
+            playSound(dieSoundtrack);
             game.isDieSoundtrackPlayed = true;
         }
     }
@@ -2164,7 +2185,7 @@ static void playMusic() {
         game.soundtrackPhase %= 4;
     }
     game.soundtrack = track;
-    PlaySound(currentSoundtrack);
+    playSound(currentSoundtrack);
 }
 #endif
 
@@ -2194,6 +2215,12 @@ int main(void) {
 
         game.proceed = false;
         if (IsKeyPressed(KEY_ENTER)) game.proceed = true;
+
+        for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+            game.sfxPlayed[i] = SFX_MAX;
+        }
+
+        if (IsKeyPressed(KEY_M)) game.mute = !game.mute;
 
         game.logic();
 
