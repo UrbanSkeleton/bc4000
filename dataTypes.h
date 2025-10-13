@@ -218,6 +218,7 @@ typedef struct {
     Texture2D gameOverCurtain;
     Texture2D pause;
     Texture2D scores;
+    Texture2D lan;
 } Textures;
 
 typedef enum {
@@ -315,6 +316,9 @@ typedef struct {
 } GameFunctions;
 
 typedef struct {
+    int screenWidth;
+    int screenHeight;
+    Camera2D camera;
     Cell field[FIELD_ROWS][FIELD_COLS];
     Tank tanks[MAX_TANK_COUNT];
     TankSpec tankSpecs[TMax];

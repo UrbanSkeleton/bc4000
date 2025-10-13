@@ -317,6 +317,14 @@ static void drawPause() {
                    WHITE);
 }
 
+static void updateCamera() {
+    game.camera.target = (Vector2){0, 0};
+    game.camera.zoom = (float)game.screenHeight / SCREEN_HEIGHT;
+    game.camera.offset =
+        (Vector2){(game.screenWidth - SCREEN_WIDTH * game.camera.zoom) / 2,
+                  (game.screenHeight - SCREEN_HEIGHT * game.camera.zoom) / 2};
+}
+
 static void drawGame() {
     drawField();
     drawBullets();
@@ -442,6 +450,7 @@ static void loadTextures() {
         LoadTexture("textures/" ASSETDIR "/big_explosion_4.png");
     game.textures.bigExplosions[4] =
         LoadTexture("textures/" ASSETDIR "/big_explosion_5.png");
+    game.textures.lan = LoadTexture("textures/" ASSETDIR "/lan.png");
 }
 
 static void loadStage(int stage) {
@@ -1780,6 +1789,7 @@ static void lanMenuLogic() {
 }
 
 static void drawLanMenu() {
+#ifndef ALT_ASSETS
     static const int N = 256;
     char text[N];
     snprintf(text, N, "LAN MODE:");
@@ -1797,6 +1807,28 @@ static void drawLanMenu() {
     snprintf(text, N, "BACK");
     drawText(text, centerX(measureText(text, FONT_SIZE)), 650, FONT_SIZE,
              game.lanMenu.lanMenuSelectedItem == LMBack ? RED : WHITE);
+#else
+    int topY = 150;
+    Texture2D *tex = &game.textures.lan;
+    int titleTexHeight = tex->height;
+    int x = (SCREEN_WIDTH - tex->width * 2) / 2;
+    int y = topY;
+    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, titleTexHeight},
+                   (Rectangle){x, y, tex->width * 2, titleTexHeight * 2},
+                   (Vector2){}, 0, WHITE);
+    if (game.lanMenu.lanMenuSelectedItem != LMNone) {
+        tex = &game.textures.player1Tank;
+        int texX =
+            (3 * 2 + ((long)(game.totalTime * 16) % 2)) * TANK_TEXTURE_SIZE;
+        DrawTexturePro(
+            *tex, (Rectangle){texX, 0, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
+            (Rectangle){x + 150,
+                        topY + titleTexHeight * 2 - 174 +
+                            (game.lanMenu.lanMenuSelectedItem - 1) * 60,
+                        TANK_TEXTURE_SIZE * 4, TANK_TEXTURE_SIZE * 4},
+            (Vector2){}, 0, WHITE);
+    }
+#endif
 }
 
 static void initHostGame() {
@@ -2208,14 +2240,15 @@ int main(void) {
     srand(time(0));
 
     SetTraceLogLevel(LOG_NONE);
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
+    InitWindow(0, 0, "Battle City 4000");
     SetTargetFPS(60);
 
-    RenderTexture2D renderTexture =
-        LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-
     int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display) / 1, GetMonitorHeight(display) / 1);
+
+    game.screenWidth = GetMonitorWidth(display);
+    game.screenHeight = GetMonitorHeight(display);
+
+    SetWindowSize(game.screenWidth, game.screenHeight);
     ToggleFullscreen();
 
     InitAudioDevice();
@@ -2239,17 +2272,15 @@ int main(void) {
 
         game.logic();
 
-        BeginTextureMode(renderTexture);
         ClearBackground(BLACK);
-        game.draw();
-        EndTextureMode();
+
         BeginDrawing();
-        int sh = GetScreenHeight();
-        int sw = sh * ((float)SCREEN_WIDTH / SCREEN_HEIGHT);
-        DrawTexturePro(renderTexture.texture,
-                       (Rectangle){0, 0, SCREEN_WIDTH, -SCREEN_HEIGHT},
-                       (Rectangle){(GetScreenWidth() - sw) / 2, 0, sw, sh},
-                       (Vector2){0, 0}, 0, WHITE);
+
+        updateCamera();
+        BeginMode2D(game.camera);
+        game.draw();
+        EndMode2D();
+
         EndDrawing();
         game.frameTime = GetFrameTime();
 #ifdef ALT_ASSETS
