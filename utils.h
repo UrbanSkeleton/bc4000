@@ -1,3 +1,6 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +12,8 @@ typedef struct {
     u8 *bytes;
     long size;
 } Buffer;
+
+#define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -47,3 +52,5 @@ static bool collision(int x1, int y1, int w1, int h1, int x2, int y2, int w2,
     return (MAX(x1, x2) < MIN(x1 + w1, x2 + w2)) &&
            (MAX(y1, y2) < MIN(y1 + h1, y2 + h2));
 }
+
+#endif

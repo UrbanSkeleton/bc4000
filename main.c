@@ -2,8 +2,12 @@
 #include <string.h>
 #include <time.h>
 
+#include "constants.h"
+#include "dataTypes.h"
+#include "gamePackager.h"
+#include "networkHeaders.h"
 #include "raylib.h"
-#include "utils.c"
+#include "utils.h"
 
 // #define DRAW_CELL_GRID
 #define ALT_ASSETS
@@ -17,8 +21,10 @@
 #endif
 
 static void gameLogic();
+static void lanGameLogic();
 static void drawGame();
 static void stageSummaryLogic();
+static void lanStageSummaryLogic();
 static void drawStageSummary();
 static void titleLogic();
 static void drawTitle();
@@ -27,380 +33,27 @@ static void drawGameOverCurtain();
 static void congratsLogic();
 static void drawCongrats();
 static void saveHiScore();
-
-#define ASIZE(a) (sizeof(a) / sizeof(a[0]))
-
-typedef struct {
-    int row;
-    int col;
-} CellInfo;
-
-const CellInfo fortressWall[] = {
-    {13 * 4 - 6 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 2 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 2 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 2 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 2 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 3 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 3 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 3 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 3 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 8 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 8 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 8 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 8 + 4},
-
-    {13 * 4 - 6 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 5 + 2, 5 * 4 + 9 + 4},
-    {13 * 4 - 4 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 3 + 2, 5 * 4 + 9 + 4},
-    {13 * 4 - 2 + 2, 5 * 4 + 9 + 4}, {13 * 4 - 1 + 2, 5 * 4 + 9 + 4},
-
-    {13 * 4 - 6 + 2, 6 * 4 + 0 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 0 + 4},
-    {13 * 4 - 6 + 2, 6 * 4 + 1 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 1 + 4},
-
-    {13 * 4 - 6 + 2, 6 * 4 + 2 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 2 + 4},
-    {13 * 4 - 6 + 2, 6 * 4 + 3 + 4}, {13 * 4 - 5 + 2, 6 * 4 + 3 + 4},
-};
-
-const int LEVEL_COUNT = 35;
-const float SLIDING_TIME = 0.6;
-const int FONT_SIZE = 40;
-const float TITLE_SLIDE_TIME = 1;
-const float IMMOBILE_TIME = 5;
-const float GAME_OVER_SLIDE_TIME = 1;
-const float STAGE_END_TIME = 3;
-const float GAME_OVER_DELAY = 3;
-const float STAGE_CURTAIN_TIME = 2;
-const float STAGE_SUMMARY_SLIDE_TIME = 0.001;
-const float TIMER_TIME = 15.0;
-const float SHIELD_TIME = 15.0;
-const float SHOVEL_TIME = 15.0;
-const int POWERUP_SCORE = 500;
-const int MAX_POWERUP_COUNT = 3;
-const int STAGE_COUNT = 16;
-const int FIELD_COLS = 64;
-const int FIELD_ROWS = 56;
-const int CELL_SIZE = 16;
-const int SCREEN_WIDTH = FIELD_COLS * CELL_SIZE;
-const int SCREEN_HEIGHT = FIELD_ROWS * CELL_SIZE;
-const int SNAP_TO = CELL_SIZE * 2;
-const int TANK_SIZE = CELL_SIZE * 4;
-const int TANK_TEXTURE_SIZE = 16;
-const int FLAG_SIZE = TANK_SIZE;
-const Vector2 POWER_UP_TEXTURE_SIZE = {30, 28};
-const int POWER_UP_SIZE = CELL_SIZE * 4;
-const int SPAWN_TEXTURE_SIZE = 32;
-const int UI_TANK_TEXTURE_SIZE = 14;
-const int UI_TANK_SIZE = CELL_SIZE * 2;
-const int PLAYER1_START_COL = 4 * 4 + 4;
-const int PLAYER2_START_COL = 4 * 8 + 4;
-const Vector2 PLAYER1_START_POS = {CELL_SIZE * PLAYER1_START_COL,
-                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
-const Vector2 PLAYER2_START_POS = {CELL_SIZE * PLAYER2_START_COL,
-                                   CELL_SIZE *(FIELD_ROWS - 4 - 2)};
-const int PLAYER_SPEED = 220;
-const short ENEMY_SPEEDS[3] = {140, 170, 240};
-const int MAX_ENEMY_COUNT = 20;
-const int MAX_TANK_COUNT = MAX_ENEMY_COUNT + 2;
-const int MAX_BULLET_COUNT = 100;
-const int MAX_EXPLOSION_COUNT = MAX_BULLET_COUNT;
-const int MAX_SCORE_POPUP_COUNT = MAX_BULLET_COUNT;
-const Vector2 SCORE_POPUP_TEXTURE_SIZE = (Vector2){16, 9};
-const Vector2 SCORE_POPUP_SIZE = (Vector2){16 * 4, 9 * 4};
-const float SCORE_POPUP_TTL = 0.5;
-const short BULLET_SPEEDS[3] = {450, 550, 600};
-const int BULLET_SIZE = 16;
-const float BULLET_EXPLOSION_TTL = 0.2f;
-const float BIG_EXPLOSION_TTL = 0.4f;
-const float ENEMY_SPAWN_INTERVAL = 3.0f;
-const float SPAWNING_TIME = 0.7f;
-const int POWERUP_POSITIONS_COUNT = 16;
-const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (7 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (4 * 4 + 2 + 2) * CELL_SIZE},
-
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(1 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(10 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE},
-    {(4 * 4 + 2 + 4) * CELL_SIZE, (1 * 4 + 2 + 2) * CELL_SIZE},
-    {(7 * 4 + 2 + 4) * CELL_SIZE, (10 * 4 + 2 + 2) * CELL_SIZE}};
-
-typedef enum {
-    TPlayer1,
-    TPlayer2,
-    TBasic,
-    TFast,
-    TPower,
-    TArmor,
-    TMax
-} TankType;
-typedef enum { TSPending, TSSpawning, TSActive, TSDead } TankStatus;
-typedef enum { DLeft, DRight, DUp, DDown } Direction;
-typedef enum {
-    UIFlag,
-    UIPlayer1,
-    UIPlayer2,
-    UIP1Tank,
-    UIP1Lifes,
-    UIP2Tank,
-    UIP2Lifes,
-    UIStageLowDigit,
-    UIStageHiDigit,
-    UIMax
-} UIElementType;
-
-typedef struct {
-    int totalScore;
-    int kills[TMax];
-} PlayerScore;
-
-typedef struct {
-    Texture2D *texture;
-    Rectangle textureSrc;
-    Vector2 pos;
-    Vector2 size;
-    Vector2 drawSize;
-    bool isVisible;
-} UIElement;
-
-typedef struct {
-    Texture2D *texture;
-    Texture2D *powerUpTexture;
-    short speed;
-    short bulletSpeed;
-    char maxBulletCount;
-    bool isEnemy;
-    short points;
-    char texRow;
-    char lifes;
-} TankSpec;
-
-typedef enum {
-    PUStar,
-    PUTank,
-    PUGrenade,
-    PUTimer,
-    PUShield,
-    PUShovel,
-    PUMax,
-} PowerUpType;
-
-typedef struct {
-    Texture2D *texture;
-    int texCol;
-} PowerUpSpec;
-
-typedef struct {
-    PowerUpType type;
-    Vector2 pos;
-    enum { PUSPending, PUSActive, PUSPickedUp } state;
-} PowerUp;
-
-typedef struct {
-    TankType type;
-    Vector2 pos;
-    Direction direction;
-    char texColOffset;
-    char firedBulletCount;
-    TankStatus status;
-    float spawningTime;
-    bool isMoving;
-    char lifes;
-    PowerUp *powerUp;
-    char tier;
-    float shieldTimeLeft;
-    float immobileTimeLeft;
-    float slidingTimeLeft;
-} Tank;
-
-typedef struct {
-    bool fire;
-    bool move;
-    Direction direction;
-} Command;
-
-typedef struct {
-    float duration;
-    Texture2D *textures;
-    char textureCount;
-} Animation;
-
-typedef enum { ETBullet, ETBig, ETMax } ExplosionType;
-
-typedef struct {
-    ExplosionType type;
-    Vector2 pos;
-    float ttl;
-    float maxTtl;
-    int scorePopupTexCol;
-} Explosion;
-
-typedef struct {
-    int texCol;
-    Vector2 pos;
-    float ttl;
-} ScorePopup;
-
-typedef enum { BTNone, BTTank } BulletType;
-
-typedef struct {
-    Vector2 pos;
-    Vector2 speed;
-    Direction direction;
-    BulletType type;
-    Tank *tank;
-} Bullet;
-
-typedef enum {
-    CTBorder,
-    CTBlank,
-    CTBrick,
-    CTConcrete,
-    CTForest,
-    CTRiver,
-    CTIce,
-    CTMax
-} CellType;
-
-typedef struct {
-    CellType type;
-    Vector2 pos;
-    char texRow;
-    char texCol;
-} Cell;
-
-typedef struct {
-    Texture2D *texture;
-    bool isSolid;
-    bool isPassable;
-} CellSpec;
-
-typedef struct {
-    Texture2D flag;
-    Texture2D deadFlag;
-    Texture2D brick;
-    Texture2D border;
-    Texture2D concrete;
-    Texture2D forest;
-    Texture2D river[2];
-    Texture2D blank;
-    Texture2D player1Tank;
-    Texture2D player2Tank;
-    Texture2D enemies;
-    Texture2D enemiesWithPowerUps;
-    Texture2D bullet;
-    Texture2D bulletExplosions[3];
-    Texture2D bigExplosions[5];
-    Texture2D spawningTank;
-    Texture2D uiFlag;
-    Texture2D ui;
-    Texture2D digits;
-    Texture2D powerups;
-    Texture2D shield;
-    Texture2D ice;
-    Texture2D title;
-    Texture2D leftArrow;
-    Texture2D rightArrow;
-    Texture2D gameOver;
-    Texture2D gameOverCurtain;
-    Texture2D pause;
-    Texture2D scores;
-} Textures;
-
-typedef struct {
-    Sound big_explosion;
-    Sound bullet_explosion;
-    Sound bullet_hit_1;
-    Sound bullet_hit_2;
-    Sound game_over;
-    Sound game_pause;
-    Sound mode_switch;
-    Sound player_fire;
-    Sound powerup_appear;
-    Sound powerup_pick;
-    Sound start_menu;
-    Sound soundtrack[21];
-} Sounds;
-
-typedef enum { MNone, MOnePlayer, MTwoPlayers, MMax } MenuSelectedItem;
-
-typedef struct {
-    float time;
-    MenuSelectedItem menuSelecteItem;
-} Title;
-
-typedef struct {
-    float time;
-} StageSummary;
-
-typedef enum { GMOnePlayer, GMTwoPlayers } GameMode;
-
-typedef enum { GSTitle, GSPlay, GSScore, GSGameOver, GSCongrats } GameScreen;
-
-typedef struct {
-    void (*logic)(void);
-    void (*draw)(void);
-} GameFunctions;
+static void lanMenuLogic();
+static void drawLanMenu();
+static void initHostGame();
+static void hostGameLogic();
+static void drawHostGame();
+static void initJoinGame();
+static void joinGameLogic();
+static void drawJoinGame();
 
 static GameFunctions gameFunctions[] = {
     {.logic = titleLogic, .draw = drawTitle},
+    {.logic = lanMenuLogic, .draw = drawLanMenu},
+    {.logic = hostGameLogic, .draw = drawHostGame},
+    {.logic = joinGameLogic, .draw = drawJoinGame},
     {.logic = gameLogic, .draw = drawGame},
+    {.logic = lanGameLogic, .draw = drawGame},
     {.logic = stageSummaryLogic, .draw = drawStageSummary},
+    {.logic = lanStageSummaryLogic, .draw = drawStageSummary},
     {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
     {.logic = congratsLogic, .draw = drawCongrats},
 };
-
-typedef struct {
-    Cell field[FIELD_ROWS][FIELD_COLS];
-    Tank tanks[MAX_TANK_COUNT];
-    TankSpec tankSpecs[TMax];
-    Bullet bullets[MAX_BULLET_COUNT];
-    Vector2 flagPos;
-    bool isFlagDead;
-    CellSpec cellSpecs[CTMax];
-    PowerUpSpec powerUpSpecs[PUMax];
-    Animation explosionAnimations[ETMax];
-    Explosion explosions[MAX_EXPLOSION_COUNT];
-    ScorePopup scorePopups[MAX_SCORE_POPUP_COUNT];
-    Textures textures;
-    Sounds sounds;
-    float frameTime;
-    float totalTime;
-    float timeSinceSpawn;
-    char activeEnemyCount;
-    char pendingEnemyCount;
-    char maxActiveEnemyCount;
-    char stage;
-    UIElement uiElements[UIMax];
-    PlayerScore playerScores[2];
-    PowerUp powerUps[MAX_POWERUP_COUNT];
-    float timerPowerUpTimeLeft;
-    float shovelPowerUpTimeLeft;
-    void (*logic)();
-    void (*draw)();
-    Title title;
-    StageSummary stageSummary;
-    GameMode mode;
-    float stageCurtainTime;
-    float gameOverTime;
-    float stageEndTime;
-    bool isStageCurtainSoundPlayed;
-    bool isPaused;
-    int hiScore;
-    GameScreen screen;
-    char soundtrackPhase;
-    char soundtrack;
-    bool isDieSoundtrackPlayed;
-    Font font;
-} Game;
 
 static Game game;
 
@@ -680,20 +333,23 @@ static void drawGame() {
 }
 
 static void loadSounds() {
-    game.sounds.big_explosion = LoadSound("sounds/big_explosion.ogg");
-    game.sounds.bullet_explosion = LoadSound("sounds/bullet_explosion.ogg");
-    game.sounds.bullet_hit_1 = LoadSound("sounds/bullet_hit_1.ogg");
-    game.sounds.bullet_hit_2 = LoadSound("sounds/bullet_hit_2.ogg");
-    game.sounds.game_over = LoadSound("sounds/game_over.ogg");
-    game.sounds.game_pause = LoadSound("sounds/game_pause.ogg");
-    game.sounds.mode_switch = LoadSound("sounds/mode_switch.ogg");
-    game.sounds.player_fire = LoadSound("sounds/player_fire.ogg");
-    game.sounds.powerup_appear = LoadSound("sounds/powerup_appear.ogg");
+    game.sounds.sfx[SFX_BIG_EXPLOSION] = LoadSound("sounds/big_explosion.ogg");
+    game.sounds.sfx[SFX_BULLET_EXPLOSION] =
+        LoadSound("sounds/bullet_explosion.ogg");
+    game.sounds.sfx[SFX_BULLET_HIT_1] = LoadSound("sounds/bullet_hit_1.ogg");
+    game.sounds.sfx[SFX_BULLET_HIT_2] = LoadSound("sounds/bullet_hit_2.ogg");
+    game.sounds.sfx[SFX_GAME_OVER] = LoadSound("sounds/game_over.ogg");
+    game.sounds.sfx[SFX_GAME_PAUSE] = LoadSound("sounds/game_pause.ogg");
+    game.sounds.sfx[SFX_MODE_SWITCH] = LoadSound("sounds/mode_switch.ogg");
+    game.sounds.sfx[SFX_PLAYER_FIRE] = LoadSound("sounds/player_fire.ogg");
+    game.sounds.sfx[SFX_POWERUP_APPEAR] =
+        LoadSound("sounds/powerup_appear.ogg");
 
-    game.sounds.powerup_pick =
+    game.sounds.sfx[SFX_POWERUP_PICK] =
         LoadSound("sounds/" ASSETDIR "/powerup_pick." SOUND_EXT);
-    game.sounds.start_menu =
+    game.sounds.sfx[SFX_START_MENU] =
         LoadSound("sounds/" ASSETDIR "/start_menu." SOUND_EXT);
+
 #ifdef ALT_ASSETS
     for (int track = 0; track <= 4; track++) {
         for (int phase = 0; phase <= 3; phase++) {
@@ -706,6 +362,20 @@ static void loadSounds() {
     game.sounds.soundtrack[ASIZE(game.sounds.soundtrack) - 1] =
         LoadSound("sounds/soundtrack/soundtrackDie.wav");
 #endif
+}
+
+static void playSound(Sound sound) {
+    if (!game.mute) PlaySound(sound);
+}
+
+static void playSfx(SfxType sfx) {
+    playSound(game.sounds.sfx[sfx]);
+    for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+        if (game.sfxPlayed[i] == SFX_MAX) {
+            game.sfxPlayed[i] = sfx;
+            break;
+        }
+    }
 }
 
 static void loadTextures() {
@@ -868,7 +538,7 @@ static void initUIElements() {
                         .size = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2},
                         .drawSize = (Vector2){CELL_SIZE * 2, CELL_SIZE * 2}};
     }
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         game.uiElements[UIPlayer2] =
             (UIElement){.isVisible = true,
                         .texture = &game.textures.ui,
@@ -978,7 +648,7 @@ static void initStage(char stage) {
     }
     loadStage(game.stage);
     spawnPlayer(&game.tanks[TPlayer1], false);
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         spawnPlayer(&game.tanks[TPlayer2], false);
     }
     static char startingCols[3] = {4, 4 + (FIELD_COLS - 12) / 4 / 2 * 4,
@@ -1123,7 +793,7 @@ static void fireBullet(Tank *t) {
     if (t->firedBulletCount >= game.tankSpecs[t->type].maxBulletCount) return;
     t->firedBulletCount++;
     if (!isEnemy(t)) {
-        PlaySound(game.sounds.player_fire);
+        playSfx(SFX_PLAYER_FIRE);
     }
     for (int i = 0; i < MAX_BULLET_COUNT; i++) {
         Bullet *b = &game.bullets[i];
@@ -1310,7 +980,7 @@ static void destroyAllTanks() {
         Tank *t = &game.tanks[i + 2];
         if (t->status == TSActive) destroyTank(t, false);
     }
-    PlaySound(game.sounds.bullet_explosion);
+    playSfx(SFX_BULLET_EXPLOSION);
 }
 
 static void addScore(TankType type, int score) {
@@ -1333,7 +1003,7 @@ static void handlePowerUpHit(Tank *t) {
                       POWER_UP_SIZE - (powerUpHitboxOffset * 2),
                       POWER_UP_SIZE - (powerUpHitboxOffset * 2))) {
             p->state = PUSPickedUp;
-            PlaySound(game.sounds.powerup_pick);
+            playSfx(SFX_POWERUP_PICK);
             createScorePopup(4, p->pos, POWER_UP_SIZE);
             addScore(t->type, POWERUP_SCORE);
             switch (p->type) {
@@ -1512,6 +1182,27 @@ static void handlePlayerInput(TankType type) {
     handleCommand(&game.tanks[type], cmd);
 }
 
+static void handleClientInput(TankType type) {
+    Command cmd = {};
+    if (game.lan.clientInput[0]) {
+        cmd.move = true;
+        cmd.direction = DRight;
+    } else if (game.lan.clientInput[1]) {
+        cmd.move = true;
+        cmd.direction = DLeft;
+    } else if (game.lan.clientInput[2]) {
+        cmd.move = true;
+        cmd.direction = DUp;
+    } else if (game.lan.clientInput[3]) {
+        cmd.move = true;
+        cmd.direction = DDown;
+    }
+    if (game.lan.clientInput[4]) {
+        cmd.fire = true;
+    }
+    handleCommand(&game.tanks[type], cmd);
+}
+
 static void setScreen(GameScreen s) {
     game.screen = s;
     game.logic = gameFunctions[s].logic;
@@ -1519,14 +1210,19 @@ static void setScreen(GameScreen s) {
 }
 
 static void handleInput() {
-    if (game.gameOverTime > 0 && IsKeyPressed(KEY_ENTER)) {
-        setScreen(GSScore);
+    if (game.gameOverTime > 0 && game.proceed) {
+        if (game.screen == GSPlayLan)
+            setScreen(GSScoreLan);
+        else
+            setScreen(GSScore);
         return;
     }
     if (game.gameOverTime > 0) return;
     handlePlayerInput(TPlayer1);
     if (game.mode == GMTwoPlayers) {
         handlePlayerInput(TPlayer2);
+    } else if (game.mode == GMLan) {
+        handleClientInput(TPlayer2);
     }
 }
 
@@ -1545,24 +1241,24 @@ static void destroyBrick(int row, int col, bool destroyConcrete,
     switch (game.field[row][col].type) {
         case CTBorder:
             if (playSound) {
-                PlaySound(game.sounds.bullet_hit_1);
+                playSfx(SFX_BULLET_HIT_1);
             }
             break;
         case CTBrick:
             game.field[row][col].type = CTBlank;
             if (playSound) {
-                PlaySound(game.sounds.bullet_hit_2);
+                playSfx(SFX_BULLET_HIT_2);
             }
             break;
         case CTConcrete:
             if (destroyConcrete) {
                 game.field[row][col].type = CTBlank;
                 if (playSound) {
-                    PlaySound(game.sounds.bullet_hit_2);
+                    playSfx(SFX_BULLET_HIT_2);
                 }
             } else {
                 if (playSound) {
-                    PlaySound(game.sounds.bullet_hit_1);
+                    playSfx(SFX_BULLET_HIT_1);
                 }
             }
             break;
@@ -1626,7 +1322,10 @@ static void checkStageEnd() {
     }
     if (game.stageEndTime >= STAGE_END_TIME ||
         game.gameOverTime >= GAME_OVER_SLIDE_TIME + GAME_OVER_DELAY) {
-        setScreen(GSScore);
+        if (game.screen == GSPlayLan) {
+            setScreen(GSScoreLan);
+        } else
+            setScreen(GSScore);
     }
 }
 
@@ -1651,10 +1350,10 @@ static void checkBulletHit(Bullet *b) {
         if (t->powerUp && t->powerUp->state == PUSPending) {
             t->powerUp->state = PUSActive;
             t->powerUp = NULL;
-            PlaySound(game.sounds.powerup_appear);
+            playSfx(SFX_POWERUP_APPEAR);
         }
         if (isEnemy(t) && t->lifes > 1) {
-            PlaySound(game.sounds.bullet_hit_1);
+            playSfx(SFX_BULLET_HIT_1);
             t->lifes--;
             break;
         }
@@ -1664,8 +1363,7 @@ static void checkBulletHit(Bullet *b) {
             addScore(b->tank->type, game.tankSpecs[t->type].points);
             game.playerScores[b->tank->type].kills[t->type]++;
         }
-        PlaySound(isEnemy(t) ? game.sounds.bullet_explosion
-                             : game.sounds.big_explosion);
+        playSfx(isEnemy(t) ? SFX_BULLET_EXPLOSION : SFX_BIG_EXPLOSION);
     }
 }
 
@@ -1694,7 +1392,7 @@ static bool checkFlagHit(Bullet *b) {
                   game.flagPos.y, FLAG_SIZE, FLAG_SIZE)) {
         destroyBullet(b, true);
         destroyFlag();
-        PlaySound(game.sounds.big_explosion);
+        playSfx(SFX_BIG_EXPLOSION);
         return true;
     }
     return false;
@@ -1822,7 +1520,7 @@ static void updateGameState() {
 // }
 
 static void gameOverCurtainLogic() {
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         setScreen(GSTitle);
     }
 }
@@ -1839,7 +1537,7 @@ static void drawGameOverCurtain() {
 }
 
 static void congratsLogic() {
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         setScreen(GSTitle);
     }
 }
@@ -1867,17 +1565,20 @@ static void drawCongrats() {
 
 static void stageSummaryLogic() {
     game.stageSummary.time += game.frameTime;
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         if (game.gameOverTime) {
 #ifndef ALT_ASSETS
-            PlaySound(game.sounds.game_over);
+            playSfx(SFX_GAME_OVER);
 #endif
             setScreen(GSGameOver);
         } else if (game.stage == LEVEL_COUNT) {
             setScreen(GSCongrats);
         } else {
             initStage(game.stage + 1);
-            setScreen(GSPlay);
+            if (game.mode == GMLan)
+                setScreen(GSPlayLan);
+            else
+                setScreen(GSPlay);
         }
     }
 }
@@ -1914,7 +1615,7 @@ static void drawStageSummary() {
              topY + (FONT_SIZE + linePadding) * 2, FONT_SIZE,
              (Color){241, 159, 80, 255});
 
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         int pX = (halfWidth - measureText("II-PLAYER", FONT_SIZE)) / 2;
         drawText("II-PLAYER", halfWidth + pX, topY + FONT_SIZE + linePadding,
                  FONT_SIZE, (Color){205, 62, 26, 255});
@@ -1956,7 +1657,7 @@ static void drawStageSummary() {
                  kills);
         drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100, y,
                  FONT_SIZE, WHITE);
-        if (game.mode == GMTwoPlayers) {
+        if (game.mode == GMTwoPlayers || game.mode == GMLan) {
             DrawTexturePro(game.textures.rightArrow,
                            (Rectangle){0, 0, arrowWidth, arrowHeight},
                            (Rectangle){halfWidth + (drawSize / 2) + 10,
@@ -1974,7 +1675,7 @@ static void drawStageSummary() {
     snprintf(text, N, "TOTAL %2d", player1TotalKills);
     drawText(text, halfWidth - measureText(text, FONT_SIZE) - 100,
              topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE, WHITE);
-    if (game.mode == GMTwoPlayers) {
+    if (game.mode == GMTwoPlayers || game.mode == GMLan) {
         snprintf(text, N, "%2d", player2TotalKills);
         drawText(text, halfWidth + 100,
                  topY + (FONT_SIZE + linePadding) * (TMax + 1), FONT_SIZE,
@@ -1989,11 +1690,11 @@ static void titleLogic() {
         game.title.menuSelecteItem = MOnePlayer;
     }
     if (IsKeyPressed(KEY_LEFT_SHIFT)) {
-        PlaySound(game.sounds.mode_switch);
+        playSfx(SFX_MODE_SWITCH);
         game.title.time = TITLE_SLIDE_TIME;
         game.title.menuSelecteItem =
             game.title.menuSelecteItem % (MMax - 1) + 1;
-    } else if (IsKeyPressed(KEY_ENTER)) {
+    } else if (game.proceed) {
         switch (game.title.menuSelecteItem) {
             case MOnePlayer:
                 game.mode = GMOnePlayer;
@@ -2001,15 +1702,22 @@ static void titleLogic() {
             case MTwoPlayers:
                 game.mode = GMTwoPlayers;
                 break;
+            case MLan:
+                game.mode = GMLan;
+                printf("Gamemode set to LAN\n");
+                break;
             default:
                 game.title.time = TITLE_SLIDE_TIME;
                 return;
-                ;
         }
         game.title = (Title){0};
-        setScreen(GSPlay);
-        initGameRun();
-        initStage(1);
+        if (game.mode == GMLan) {
+            setScreen(GSLan);
+        } else {
+            setScreen(GSPlay);
+            initGameRun();
+            initStage(1);
+        }
     }
 }
 
@@ -2036,31 +1744,279 @@ static void drawTitle() {
         DrawTexturePro(
             *tex, (Rectangle){texX, 0, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
             (Rectangle){x + 150,
-                        topY + titleTexHeight * 2 - 110 +
+                        topY + titleTexHeight * 2 - 174 +
                             (game.title.menuSelecteItem - 1) * 60,
                         TANK_TEXTURE_SIZE * 4, TANK_TEXTURE_SIZE * 4},
             (Vector2){}, 0, WHITE);
     }
 }
 
+static void lanMenuLogic() {
+    if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+        playSfx(SFX_MODE_SWITCH);
+        game.lanMenu.lanMenuSelectedItem =
+            game.lanMenu.lanMenuSelectedItem % (LMMax - 1) + 1;
+    }
+
+    if (game.proceed) {
+        switch (game.lanMenu.lanMenuSelectedItem) {
+            case LMHostGame:
+                game.lan.lanMode = LServer;
+                setScreen(GSHostGame);
+                initHostGame();
+                break;
+            case LMJoinGame:
+                game.lan.lanMode = LClient;
+                setScreen(GSJoinGame);
+                initJoinGame();
+                break;
+            case LMBack:
+                setScreen(GSTitle);
+                break;
+            default:
+                return;
+        }
+    }
+}
+
+static void drawLanMenu() {
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "LAN MODE:");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 2)), 70, FONT_SIZE * 2,
+             WHITE);
+
+    snprintf(text, N, "HOST GAME");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 450, FONT_SIZE,
+             game.lanMenu.lanMenuSelectedItem == LMHostGame ? RED : WHITE);
+
+    snprintf(text, N, "JOIN GAME");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 550, FONT_SIZE,
+             game.lanMenu.lanMenuSelectedItem == LMJoinGame ? RED : WHITE);
+
+    snprintf(text, N, "BACK");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), 650, FONT_SIZE,
+             game.lanMenu.lanMenuSelectedItem == LMBack ? RED : WHITE);
+}
+
+static void initHostGame() {
+    game.lan.addressLength = sizeof(game.lan.clientAddress);
+
+    if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket failed");
+        exit(1);
+    }
+
+    fcntl(game.lan.socket, F_SETFL,
+          fcntl(game.lan.socket, F_GETFL, 0) | O_NONBLOCK);
+
+    int opt = 1;
+    setsockopt(game.lan.socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(game.lan.socket, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
+
+    memset(&game.lan.serverAddress, 0, sizeof(game.lan.serverAddress));
+    game.lan.serverAddress.sin_family = AF_INET;
+    game.lan.serverAddress.sin_addr.s_addr = INADDR_ANY;
+    game.lan.serverAddress.sin_port = htons(PORT);
+
+    if (bind(game.lan.socket, (struct sockaddr *)&game.lan.serverAddress,
+             sizeof(game.lan.serverAddress)) < 0) {
+        perror("Bind failed");
+        exit(1);
+    }
+
+    printf("Server is running on port %d\n", PORT);
+}
+
+static void hostGameLogic() {
+    char buffer[BUFFER_SIZE];
+
+    // checks all new packets in order.
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                         (struct sockaddr *)&game.lan.clientAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+
+        buffer[n] = '\0';
+
+        if (strcmp(buffer, "DISCOVER") == 0) {
+            char reply[] = "AVAILABLE";
+            sendto(game.lan.socket, reply, strlen(reply), 0,
+                   (struct sockaddr *)&game.lan.clientAddress,
+                   game.lan.addressLength);
+            printf("Sent GAME_AVAILABLE to %s\n",
+                   inet_ntoa(game.lan.clientAddress.sin_addr));
+        } else if (strcmp(buffer, "JOIN_REQUEST") == 0) {
+            char reply[] = "JOIN_ACCEPT";
+            sendto(game.lan.socket, reply, strlen(reply), 0,
+                   (struct sockaddr *)&game.lan.clientAddress,
+                   game.lan.addressLength);
+            printf("%s wants to join your game, sending join accept message\n",
+                   inet_ntoa(game.lan.clientAddress.sin_addr));
+            setScreen(GSPlayLan);
+            initGameRun();
+            initStage(1);
+        }
+    }
+    // setScreen(GSPlay);
+    // initGameRun();
+    // initStage(1);
+}
+
+static void drawHostGame() {
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "Waiting for player...");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
+             SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, WHITE);
+}
+
+static void discoverGames() {
+    memset(game.lan.joinableAddresses, 0, sizeof(game.lan.joinableAddresses));
+    game.lan.availableGames = 0;
+    game.lan.selectedAddressIndex = -1;
+
+    char msg[] = "DISCOVER";
+    sendto(game.lan.socket, msg, strlen(msg), 0,
+           (struct sockaddr *)&game.lan.broadcastAddress,
+           game.lan.addressLength);
+
+    printf("Discovering joinable games...\n");
+}
+
+static void initJoinGame() {
+    game.lan.addressLength = sizeof(game.lan.clientAddress);
+    if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket failed");
+        exit(1);
+    }
+
+    fcntl(game.lan.socket, F_SETFL,
+          fcntl(game.lan.socket, F_GETFL, 0) | O_NONBLOCK);
+
+    int opt = 1;
+    setsockopt(game.lan.socket, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
+
+    memset(&game.lan.broadcastAddress, 0, sizeof(game.lan.broadcastAddress));
+    game.lan.broadcastAddress.sin_family = AF_INET;
+    game.lan.broadcastAddress.sin_port = htons(PORT);
+    inet_pton(AF_INET, BROADCAST_IP, &game.lan.broadcastAddress.sin_addr);
+
+    discoverGames();
+}
+
+static bool foundGame() {
+    if (game.lan.availableGames < MAX_AVAILABLE_GAMES) {
+        game.lan.availableGames++;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+static void joinGameLogic() {
+    char buffer[BUFFER_SIZE];
+
+    // checks all new packets in order.
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                         (struct sockaddr *)&game.lan.serverAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+
+        buffer[n] = '\0';
+
+        if (strcmp(buffer, "AVAILABLE") == 0) {
+            printf("Found available game from %s\n",
+                   inet_ntoa(game.lan.serverAddress.sin_addr));
+            if (foundGame()) {
+                game.lan.joinableAddresses[game.lan.availableGames - 1] =
+                    game.lan.serverAddress;
+            }
+        } else if (strcmp(buffer, "JOIN_ACCEPT") == 0) {
+            printf("%s has accepted your join request, joining game now\n",
+                   inet_ntoa(game.lan.serverAddress.sin_addr));
+            setScreen(GSPlayLan);
+            initGameRun();
+            initStage(1);
+        }
+    }
+
+    if (IsKeyPressed(KEY_LEFT_SHIFT)) {
+        game.lan.selectedAddressIndex++;
+        if (game.lan.selectedAddressIndex >= game.lan.availableGames)
+            game.lan.selectedAddressIndex = -2;
+    }
+
+    if (game.proceed) {
+        if (game.lan.selectedAddressIndex == -2) {
+            setScreen(GSLan);
+        }
+        if (game.lan.selectedAddressIndex == -1) {
+            discoverGames();
+        } else {
+            char msg[] = "JOIN_REQUEST";
+            sendto(game.lan.socket, msg, strlen(msg), 0,
+                   (struct sockaddr *)&game.lan
+                       .joinableAddresses[game.lan.selectedAddressIndex],
+                   game.lan.addressLength);
+        }
+    }
+}
+
+static void drawJoinGame() {
+    static const int N = 256;
+    char text[N];
+    snprintf(text, N, "FINDING GAMES");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)), 80,
+             FONT_SIZE * 1.5, WHITE);
+
+    int y = 400;
+    snprintf(text, N, "REFRESH");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
+             game.lan.selectedAddressIndex == -1 ? RED : WHITE);
+
+    for (int i = 0; i < game.lan.availableGames; i++) {
+        y += 80;
+        snprintf(text, N, "Game: %s",
+                 inet_ntoa(game.lan.joinableAddresses[i].sin_addr));
+        drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
+                 game.lan.selectedAddressIndex == i ? RED : WHITE);
+    }
+
+    y += 100;
+    snprintf(text, N, "BACK");
+    drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
+             game.lan.selectedAddressIndex == -2 ? RED : WHITE);
+}
+
 static void gameLogic() {
     if (!game.stageCurtainTime) {
-        if (IsKeyPressed(KEY_ENTER)) {
+        if (game.proceed) {
             game.stageCurtainTime = 0.001;
         }
     }
     if (game.stageCurtainTime && !game.isStageCurtainSoundPlayed) {
-        PlaySound(game.sounds.start_menu);
+        playSfx(SFX_START_MENU);
         game.isStageCurtainSoundPlayed = true;
     }
     if (game.stageCurtainTime && game.stageCurtainTime < STAGE_CURTAIN_TIME) {
         game.stageCurtainTime += game.frameTime;
     }
     if (game.stageCurtainTime < STAGE_CURTAIN_TIME) return;
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (game.proceed) {
         game.isPaused = !game.isPaused;
         if (game.isPaused) {
-            PlaySound(game.sounds.game_pause);
+            playSfx(SFX_GAME_PAUSE);
         }
     }
     if (game.isPaused) return;
@@ -2104,6 +2060,106 @@ static void gameLogic() {
     updateGameState();
 }
 
+static void lanGameClient() {
+    char buffer[MAX_PACKET_SIZE + 1];
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+                         (struct sockaddr *)&game.lan.serverAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+        buffer[n] = '\0';
+        GameStatePacket packet = unpackGameState(&game, buffer);
+        updatePlayerLifesUI();
+        if (game.screen != packet.screen) {
+            setScreen(packet.screen);
+        }
+        if (game.stage != packet.stage) {
+            initStage(packet.stage);
+        }
+    }
+
+    memset(game.lan.clientInput, 0, CLIENT_INPUT_SIZE);
+
+    if (IsKeyDown(controls[0].right)) game.lan.clientInput[0] = 1;
+    if (IsKeyDown(controls[0].left)) game.lan.clientInput[1] = 1;
+    if (IsKeyDown(controls[0].up)) game.lan.clientInput[2] = 1;
+    if (IsKeyDown(controls[0].down)) game.lan.clientInput[3] = 1;
+    if (IsKeyPressed(controls[0].fire)) game.lan.clientInput[4] = 1;
+    if (IsKeyPressed(KEY_ENTER)) game.lan.clientInput[5] = 1;
+
+    sendto(game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
+           (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
+
+    for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+        if (game.sfxPlayed[i] == SFX_MAX) break;
+        playSound(game.sounds.sfx[game.sfxPlayed[i]]);
+    }
+}
+
+static void lanGameServerSend() {
+    char buffer[MAX_PACKET_SIZE];
+    packGameState(&game, buffer);
+
+    sendto(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+           (struct sockaddr *)&game.lan.clientAddress, game.lan.addressLength);
+}
+
+static void lanGameServerRecieve() {
+    bool fire = false;
+    bool enter = false;
+
+    char buffer[BUFFER_SIZE];
+    while (true) {
+        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                         (struct sockaddr *)&game.lan.clientAddress,
+                         &game.lan.addressLength);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            perror("recvfrom");
+            break;
+        }
+        buffer[n] = '\0';
+        memcpy(game.lan.clientInput, buffer, CLIENT_INPUT_SIZE);
+        if (game.lan.clientInput[4]) fire = true;  // prevents loss of data
+        if (game.lan.clientInput[5]) enter = true;
+    }
+
+    game.lan.clientInput[4] = fire;
+    game.lan.clientInput[5] = enter;
+
+    game.proceed |= game.lan.clientInput[5];  // client pressed enter
+}
+
+static void lanGameLogic() {
+    if (game.lan.lanMode == LServer) {
+        lanGameServerRecieve();
+    } else {
+        lanGameClient();
+        return;
+    }
+
+    gameLogic();
+
+    lanGameServerSend();
+}
+
+static void lanStageSummaryLogic() {
+    if (game.lan.lanMode == LServer) {
+        lanGameServerRecieve();
+    } else {
+        lanGameClient();
+        return;
+    }
+
+    stageSummaryLogic();
+
+    lanGameServerSend();
+}
+
 static void saveHiScore() {
     u8 bytes[4];
     bytes[0] = game.hiScore & 0xFF;
@@ -2123,14 +2179,14 @@ static void playMusic() {
     (game.sounds.soundtrack[ASIZE(game.sounds.soundtrack) - 1])
     if (isFirstTime) {
         isFirstTime = false;
-        PlaySound(game.sounds.soundtrack[0]);
+        playSound(game.sounds.soundtrack[0]);
         return;
     }
     if (game.gameOverTime) {
         if (IsSoundPlaying(dieSoundtrack)) return;
         if (!game.isDieSoundtrackPlayed) {
             StopSound(currentSoundtrack);
-            PlaySound(dieSoundtrack);
+            playSound(dieSoundtrack);
             game.isDieSoundtrackPlayed = true;
         }
     }
@@ -2144,7 +2200,7 @@ static void playMusic() {
         game.soundtrackPhase %= 4;
     }
     game.soundtrack = track;
-    PlaySound(currentSoundtrack);
+    playSound(currentSoundtrack);
 }
 #endif
 
@@ -2159,7 +2215,7 @@ int main(void) {
         LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
+    SetWindowSize(GetMonitorWidth(display) / 1, GetMonitorHeight(display) / 1);
     ToggleFullscreen();
 
     InitAudioDevice();
@@ -2168,10 +2224,21 @@ int main(void) {
     setScreen(GSTitle);
 
     SetExitKey(0);
+
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
 
+        game.proceed = false;
+        if (IsKeyPressed(KEY_ENTER)) game.proceed = true;
+
+        for (int i = 0; i < MAX_SFX_PLAYED; i++) {
+            game.sfxPlayed[i] = SFX_MAX;
+        }
+
+        if (IsKeyPressed(KEY_M)) game.mute = !game.mute;
+
         game.logic();
+
         BeginTextureMode(renderTexture);
         ClearBackground(BLACK);
         game.draw();
