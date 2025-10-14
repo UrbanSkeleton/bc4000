@@ -1,6 +1,9 @@
 #include <assert.h>
+#include <libgen.h>
+#include <limits.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "dataTypes.h"
@@ -19,6 +22,15 @@
 #define ASSETDIR "original"
 #define SOUND_EXT "ogg"
 #endif
+
+void setWorkingDirectory() {
+    char exePath[PATH_MAX];
+    uint32_t size = sizeof(exePath);
+    if (_NSGetExecutablePath(exePath, &size) == 0) {
+        chdir(
+            dirname(exePath));  // set working directory to executable location
+    }
+}
 
 static void gameLogic();
 static void lanGameLogic();
@@ -2238,6 +2250,8 @@ static void playMusic() {
 
 int main(void) {
     srand(time(0));
+
+    setWorkingDirectory();
 
     SetTraceLogLevel(LOG_NONE);
     InitWindow(0, 0, "Battle City 4000");
