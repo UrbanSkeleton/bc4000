@@ -336,7 +336,8 @@ static void drawPause() {
 
 static void updateCamera() {
     game.camera.target = (Vector2){0, 0};
-    game.camera.zoom = (float)game.screenHeight / SCREEN_HEIGHT;
+    game.camera.zoom = MIN((float)game.screenHeight / SCREEN_HEIGHT,
+                           (float)game.screenWidth / SCREEN_WIDTH);
     game.camera.offset =
         (Vector2){(game.screenWidth - SCREEN_WIDTH * game.camera.zoom) / 2,
                   (game.screenHeight - SCREEN_HEIGHT * game.camera.zoom) / 2};
@@ -2259,16 +2260,9 @@ int main(void) {
     setWorkingDirectoryToResources();
 
     SetTraceLogLevel(LOG_NONE);
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(0, 0, "Battle City 4000");
     SetTargetFPS(60);
-
-    int display = GetCurrentMonitor();
-
-    game.screenWidth = GetMonitorWidth(display);
-    game.screenHeight = GetMonitorHeight(display);
-
-    SetWindowSize(game.screenWidth, game.screenHeight);
-    ToggleFullscreen();
 
     InitAudioDevice();
 
@@ -2279,6 +2273,9 @@ int main(void) {
 
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
+
+        game.screenWidth = GetScreenWidth();
+        game.screenHeight = GetScreenHeight();
 
         game.proceed = false;
         if (IsKeyPressed(KEY_ENTER)) game.proceed = true;
