@@ -1,6 +1,6 @@
 #!/bin/bash
 
-clang -Wall main.c -o package/game \
+clang -Wall main.c -o package/game -mmacosx-version-min=10.13 \
 	/usr/local/lib/libraylib.a \
 	/usr/local/lib/libzstd.a \
  	-I/usr/local/include \
