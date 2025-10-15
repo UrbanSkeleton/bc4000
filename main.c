@@ -2228,7 +2228,9 @@ static void playMusic() {
     }
     if (IsSoundPlaying(currentSoundtrack) || IsSoundPlaying(dieSoundtrack))
         return;
-    char track = game.screen == GSPlay ? (game.stage - 1) % 4 + 1 : 0;
+    char track = (game.screen == GSPlay || game.screen == GSPlayLan)
+                     ? (game.stage - 1) % 4 + 1
+                     : 0;
     if (game.soundtrack != track) {
         game.soundtrackPhase = 0;
     } else {
