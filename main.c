@@ -1,4 +1,3 @@
-#include <CoreFoundation/CoreFoundation.h>
 #include <assert.h>
 #include <libgen.h>
 #include <limits.h>
@@ -24,17 +23,13 @@
 #define SOUND_EXT "ogg"
 #endif
 
-void setWorkingDirectoryToResources() {
-    CFBundleRef mainBundle = CFBundleGetMainBundle();
-    CFURLRef resourcesURL = CFBundleCopyResourcesDirectoryURL(mainBundle);
-
-    char path[PATH_MAX];
-    if (CFURLGetFileSystemRepresentation(resourcesURL, true, (UInt8 *)path,
-                                         PATH_MAX)) {
-        chdir(path);
+void setWorkingDirectory() {
+    char exePath[PATH_MAX];
+    uint32_t size = sizeof(exePath);
+    if (_NSGetExecutablePath(exePath, &size) == 0) {
+        chdir(
+            dirname(exePath));  // set working directory to executable location
     }
-
-    CFRelease(resourcesURL);
 }
 
 static void gameLogic();
@@ -2257,7 +2252,7 @@ static void playMusic() {
 int main(void) {
     srand(time(0));
 
-    setWorkingDirectoryToResources();
+    setWorkingDirectory();
 
     SetTraceLogLevel(LOG_NONE);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
