@@ -365,7 +365,6 @@ typedef struct {
     Font font;
     bool proceed;
     bool mute;
-    bool fullscreen;
 } Game;
 
 #endif

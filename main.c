@@ -2261,8 +2261,7 @@ int main(void) {
 
     SetTraceLogLevel(LOG_NONE);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(1, 1, "Battle City 4000");
-    MaximizeWindow();
+    InitWindow(0, 0, "Battle City 4000");
     SetTargetFPS(60);
 
     InitAudioDevice();
@@ -2275,26 +2274,8 @@ int main(void) {
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
 
-        if (IsKeyPressed(KEY_F)) {
-            if (game.fullscreen) {
-                game.fullscreen = false;
-                ToggleFullscreen();
-                SetWindowSize(0, 0);
-                MaximizeWindow();
-            } else {
-                game.fullscreen = true;
-                ToggleFullscreen();
-            }
-        }
-
-        if (!game.fullscreen) {
-            game.screenWidth = GetScreenWidth();
-            game.screenHeight = GetScreenHeight();
-        } else {
-            int display = GetCurrentMonitor();
-            game.screenWidth = GetMonitorWidth(display);
-            game.screenHeight = GetMonitorHeight(display);
-        }
+        game.screenWidth = GetScreenWidth();
+        game.screenHeight = GetScreenHeight();
 
         game.proceed = false;
         if (IsKeyPressed(KEY_ENTER)) game.proceed = true;
