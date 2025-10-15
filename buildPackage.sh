@@ -2,6 +2,7 @@
 
 clang -Wall main.c -o package/game \
 	/usr/local/lib/libraylib.a \
+	/usr/local/lib/libzstd.a \
  	-I/usr/local/include \
 	-framework CoreVideo \
 	-framework IOKit \

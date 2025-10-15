@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <zstd.h>
 
 #include "constants.h"
 #include "dataTypes.h"
@@ -2108,7 +2109,20 @@ static void lanGameClient() {
             break;
         }
         buffer[n] = '\0';
-        GameStatePacket packet = unpackGameState(&game, buffer);
+
+        char decompressed[MAX_PACKET_SIZE];
+        size_t decompressedSize =
+            ZSTD_decompress(decompressed, sizeof(decompressed), buffer, n);
+
+        printf("%d\n", n);
+
+        if (ZSTD_isError(decompressedSize)) {
+            fprintf(stderr, "ZSTD decompression failed: %s\n",
+                    ZSTD_getErrorName(decompressedSize));
+            return;
+        }
+
+        GameStatePacket packet = unpackGameState(&game, decompressed);
         updatePlayerLifesUI();
         if (game.screen != packet.screen) {
             setScreen(packet.screen);
@@ -2137,10 +2151,21 @@ static void lanGameClient() {
 }
 
 static void lanGameServerSend() {
-    char buffer[MAX_PACKET_SIZE];
-    packGameState(&game, buffer);
+    char rawBuffer[MAX_PACKET_SIZE];
+    size_t rawSize = packGameState(&game, rawBuffer);
 
-    sendto(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+    char compressedBuffer[MAX_PACKET_SIZE];
+
+    size_t compressedSize = ZSTD_compress(
+        compressedBuffer, sizeof(compressedBuffer), rawBuffer, rawSize, 5);
+
+    if (ZSTD_isError(compressedSize)) {
+        fprintf(stderr, "ZSTD compression failed: %s\n",
+                ZSTD_getErrorName(compressedSize));
+        return;
+    }
+
+    sendto(game.lan.socket, compressedBuffer, compressedSize, 0,
            (struct sockaddr *)&game.lan.clientAddress, game.lan.addressLength);
 }
 
