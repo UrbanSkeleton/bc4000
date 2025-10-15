@@ -2254,6 +2254,7 @@ int main(void) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1, 1, "Battle City 4000");
     MaximizeWindow();
+    SetTargetFPS(60);
 
     InitAudioDevice();
 
