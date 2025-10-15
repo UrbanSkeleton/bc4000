@@ -1,6 +1,9 @@
 #include <assert.h>
+#include <libgen.h>
+#include <limits.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "dataTypes.h"
@@ -2238,6 +2241,13 @@ static void playMusic() {
 #endif
 
 int main(void) {
+    char exePath[PATH_MAX];
+    uint32_t size = sizeof(exePath);
+    if (_NSGetExecutablePath(exePath, &size) == 0) {
+        chdir(
+            dirname(exePath));  // set working directory to executable location
+    }
+
     srand(time(0));
 
     SetTraceLogLevel(LOG_NONE);
