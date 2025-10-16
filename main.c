@@ -45,6 +45,8 @@ static void drawHostGame();
 static void initJoinGame();
 static void joinGameLogic();
 static void drawJoinGame();
+static void timedOutLogic();
+static void drawTimedOut();
 
 static GameFunctions gameFunctions[] = {
     {.logic = titleLogic, .draw = drawTitle},
@@ -57,6 +59,7 @@ static GameFunctions gameFunctions[] = {
     {.logic = lanStageSummaryLogic, .draw = drawStageSummary},
     {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
     {.logic = congratsLogic, .draw = drawCongrats},
+    {.logic = timedOutLogic, .draw = drawTimedOut},
 };
 
 static Game game;
@@ -718,6 +721,7 @@ static void loadHiScore() {
 static void initGameRun() {
     saveHiScore();
     game.isFlagDead = false;
+    game.tick = 0;
     game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
     game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
@@ -2037,6 +2041,28 @@ static void drawJoinGame() {
              game.lan.selectedAddressIndex == -2 ? RED : WHITE);
 }
 
+static void checkTimeout() {
+    game.lan.timeout += game.frameTime;
+    if (game.lan.timeout > TIMEOUT) {
+        close(game.lan.socket);
+        printf("Connection timed out!");
+        setScreen(GSTimedOut);
+    }
+}
+
+static void timedOutLogic() {
+    game.lan.timeoutScreenTime += game.frameTime;
+    if (game.lan.timeoutScreenTime > TIMEOUT_SCREEN_TIME) setScreen(GSTitle);
+}
+
+static void drawTimedOut() {
+    static const int N = 64;
+    char text[N];
+    snprintf(text, N, "Connection timed out!");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
+             SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, RED);
+}
+
 static void gameLogic() {
     if (!game.stageCurtainTime) {
         if (game.proceed) {
@@ -2109,6 +2135,8 @@ static void lanGameClient() {
             perror("recvfrom");
             break;
         }
+        game.lan.timeout = 0;
+
         buffer[n] = '\0';
 
         char decompressed[MAX_PACKET_SIZE];
@@ -2124,6 +2152,8 @@ static void lanGameClient() {
         }
 
         GameStatePacket packet = unpackGameState(&game, decompressed);
+
+        if (packet.tick != game.tick) continue;
         updatePlayerLifesUI();
         if (game.screen != packet.screen) {
             setScreen(packet.screen);
@@ -2152,6 +2182,8 @@ static void lanGameClient() {
 }
 
 static void lanGameServerSend() {
+    game.tick++;
+
     char rawBuffer[MAX_PACKET_SIZE];
     size_t rawSize = packGameState(&game, rawBuffer);
 
@@ -2184,6 +2216,8 @@ static void lanGameServerRecieve() {
             perror("recvfrom");
             break;
         }
+        game.lan.timeout = 0;
+
         buffer[n] = '\0';
         memcpy(game.lan.clientInput, buffer, CLIENT_INPUT_SIZE);
         if (game.lan.clientInput[4]) fire = true;  // prevents loss of data
@@ -2197,6 +2231,8 @@ static void lanGameServerRecieve() {
 }
 
 static void lanGameLogic() {
+    checkTimeout();
+
     if (game.lan.lanMode == LServer) {
         lanGameServerRecieve();
     } else {

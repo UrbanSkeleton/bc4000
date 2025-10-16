@@ -84,5 +84,7 @@ const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
 #define CLIENT_INPUT_SIZE 6
 
 const int MAX_AVAILABLE_GAMES = 4;
+const float TIMEOUT = 3.0;
+const float TIMEOUT_SCREEN_TIME = 3.0;
 
 #endif
