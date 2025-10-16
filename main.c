@@ -743,7 +743,7 @@ static void initGame() {
     loadHiScore();
     loadTextures();
     loadSounds();
-    game.font = LoadFontEx("fonts/7x7.ttf", 40, NULL, 0);
+    game.font = LoadFontEx("fonts/7x7.ttf", 56, NULL, 0);
     game.explosionAnimations[ETBullet] =
         (Animation){.duration = BULLET_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bulletExplosions),

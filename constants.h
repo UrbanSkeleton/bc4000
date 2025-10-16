@@ -6,7 +6,7 @@
 const int MAX_SFX_PLAYED = 4;
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
-const int FONT_SIZE = 40;
+const int FONT_SIZE = 28;
 const float TITLE_SLIDE_TIME = 1;
 const float IMMOBILE_TIME = 5;
 const float GAME_OVER_SLIDE_TIME = 1;
