@@ -1317,10 +1317,7 @@ static void checkBulletCols(Bullet *b, int startCol, int endCol, int row,
     }
 }
 
-static void gameOver() {
-    game.gameOverTime = 0.001;
-    close(game.lan.socket);
-}
+static void gameOver() { game.gameOverTime = 0.001; }
 
 static void handlePlayerKill(Tank *t) {
     if (game.gameOverTime > 0) return;
@@ -1539,6 +1536,7 @@ static void updateGameState() {
 static void gameOverCurtainLogic() {
     if (game.proceed) {
         setScreen(GSTitle);
+        close(game.lan.socket);
     }
 }
 
