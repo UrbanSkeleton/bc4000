@@ -722,6 +722,7 @@ static void initGameRun() {
     saveHiScore();
     game.isFlagDead = false;
     game.tick = 0;
+    game.lan.timeout = 0;
     game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
     game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
@@ -2143,8 +2144,6 @@ static void lanGameClient() {
         size_t decompressedSize =
             ZSTD_decompress(decompressed, sizeof(decompressed), buffer, n);
 
-        printf("%d\n", n);
-
         if (ZSTD_isError(decompressedSize)) {
             fprintf(stderr, "ZSTD decompression failed: %s\n",
                     ZSTD_getErrorName(decompressedSize));
@@ -2190,7 +2189,7 @@ static void lanGameServerSend() {
     char compressedBuffer[MAX_PACKET_SIZE];
 
     size_t compressedSize = ZSTD_compress(
-        compressedBuffer, sizeof(compressedBuffer), rawBuffer, rawSize, 5);
+        compressedBuffer, sizeof(compressedBuffer), rawBuffer, rawSize, 7);
 
     if (ZSTD_isError(compressedSize)) {
         fprintf(stderr, "ZSTD compression failed: %s\n",
