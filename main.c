@@ -1843,7 +1843,7 @@ static void drawLanMenu() {
 }
 
 static void initHostGame() {
-    game.lan.addressLength = sizeof(game.lan.clientAddress);
+    game.lan.addressLength = sizeof(struct sockaddr_in);
 
     if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Socket failed");
@@ -1939,7 +1939,7 @@ static void discoverGames() {
 }
 
 static void initJoinGame() {
-    game.lan.addressLength = sizeof(game.lan.clientAddress);
+    game.lan.addressLength = sizeof(struct sockaddr_in);
     if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Socket failed");
         exit(1);
@@ -2036,7 +2036,7 @@ static void drawJoinGame() {
 
     for (int i = 0; i < game.lan.availableGames; i++) {
         y += 80;
-        snprintf(text, N, "Game: %s",
+        snprintf(text, N, "GAME: %s",
                  inet_ntoa(game.lan.joinableAddresses[i].sin_addr));
         drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
                  game.lan.selectedAddressIndex == i ? RED : WHITE);
@@ -2065,7 +2065,7 @@ static void timedOutLogic() {
 static void drawTimedOut() {
     static const int N = 64;
     char text[N];
-    snprintf(text, N, "Connection timed out!");
+    snprintf(text, N, "CONNECTION TIMED OUT!");
     drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
              SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, RED);
 }
@@ -2132,16 +2132,25 @@ static void gameLogic() {
 }
 
 static void lanGameClient() {
+    struct sockaddr_in recvAddress;
+
     char buffer[MAX_PACKET_SIZE + 1];
     while (true) {
-        int n = recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
-                         (struct sockaddr *)&game.lan.serverAddress,
-                         &game.lan.addressLength);
+        int n =
+            recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+                     (struct sockaddr *)&recvAddress, &game.lan.addressLength);
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             perror("recvfrom");
             break;
         }
+
+        if (recvAddress.sin_addr.s_addr !=
+                game.lan.serverAddress.sin_addr.s_addr ||
+            recvAddress.sin_port != game.lan.serverAddress.sin_port) {
+            continue;
+        }
+
         game.lan.timeout = 0;
 
         buffer[n] = '\0';
@@ -2177,8 +2186,12 @@ static void lanGameClient() {
     if (IsKeyPressed(controls[0].fire)) game.lan.clientInput[4] = 1;
     if (IsKeyPressed(KEY_ENTER)) game.lan.clientInput[5] = 1;
 
-    sendto(game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
-           (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
+    ssize_t sent = sendto(
+        game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
+        (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
+    if (sent < 0) {
+        perror("sendto");
+    }
 
     for (int i = 0; i < MAX_SFX_PLAYED; i++) {
         if (game.sfxPlayed[i] == SFX_MAX) break;
@@ -2211,20 +2224,30 @@ static void lanGameServerRecieve() {
     bool fire = false;
     bool enter = false;
 
+    struct sockaddr_in recvAddress;
+
     char buffer[BUFFER_SIZE];
     while (true) {
-        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
-                         (struct sockaddr *)&game.lan.clientAddress,
-                         &game.lan.addressLength);
+        int n =
+            recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                     (struct sockaddr *)&recvAddress, &game.lan.addressLength);
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             perror("recvfrom");
             break;
         }
+
+        if (recvAddress.sin_addr.s_addr !=
+                game.lan.clientAddress.sin_addr.s_addr ||
+            recvAddress.sin_port != game.lan.clientAddress.sin_port) {
+            continue;
+        }
+
         game.lan.timeout = 0;
 
-        buffer[n] = '\0';
-        memcpy(game.lan.clientInput, buffer, CLIENT_INPUT_SIZE);
+        if (n > CLIENT_INPUT_SIZE) n = CLIENT_INPUT_SIZE;
+        memcpy(game.lan.clientInput, buffer, n);
+
         if (game.lan.clientInput[4]) fire = true;  // prevents loss of data
         if (game.lan.clientInput[5]) enter = true;
     }
