@@ -743,7 +743,7 @@ static void initGame() {
     loadHiScore();
     loadTextures();
     loadSounds();
-    game.font = LoadFontEx("fonts/LiberationMono.ttf", 40, NULL, 0);
+    game.font = LoadFontEx("fonts/7x7.ttf", 40, NULL, 0);
     game.explosionAnimations[ETBullet] =
         (Animation){.duration = BULLET_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bulletExplosions),
@@ -1872,6 +1872,12 @@ static void initHostGame() {
 }
 
 static void hostGameLogic() {
+    if (game.proceed) {
+        close(game.lan.socket);
+        setScreen(GSLan);
+        return;
+    }
+
     char buffer[BUFFER_SIZE];
 
     // checks all new packets in order.
@@ -1906,17 +1912,17 @@ static void hostGameLogic() {
             initStage(1);
         }
     }
-    // setScreen(GSPlay);
-    // initGameRun();
-    // initStage(1);
 }
 
 static void drawHostGame() {
     static const int N = 256;
     char text[N];
-    snprintf(text, N, "Waiting for player...");
+    snprintf(text, N, "WAITING FOR PLAYER...");
     drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
-             SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, WHITE);
+             SCREEN_HEIGHT / 2 - 50, FONT_SIZE * 1.5, WHITE);
+    snprintf(text, N, "PRESS ENTER TO GO BACK");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1)),
+             SCREEN_HEIGHT / 2 + 50, FONT_SIZE * 1, RED);
 }
 
 static void discoverGames() {
