@@ -133,6 +133,12 @@ typedef struct {
 } Command;
 
 typedef struct {
+    Command command;
+    int number;
+    float dt;
+} ClientCommand;
+
+typedef struct {
     float duration;
     Texture2D *textures;
     char textureCount;
@@ -294,9 +300,14 @@ typedef struct {
     int availableGames;
     int selectedAddressIndex;
     struct sockaddr_in joinableAddresses[MAX_AVAILABLE_GAMES];
-    char clientInput[CLIENT_INPUT_SIZE];
+    int clientInput[CLIENT_INPUT_SIZE / sizeof(int)];
     float timeout;
     float timeoutScreenTime;
+    ClientCommand clientCommands[MAX_CLIENT_COMMANDS];
+    int clientCommandIndexFirst;
+    int clientCommandIndexLast;
+    float lastPacketTick;
+    int inputNumber;
 } Lan;
 
 typedef enum {
@@ -369,7 +380,7 @@ typedef struct {
     bool proceed;
     bool mute;
     bool fullscreen;
-    long tick;
+    float tick;
 } Game;
 
 #endif

@@ -722,6 +722,7 @@ static void initGameRun() {
     saveHiScore();
     game.isFlagDead = false;
     game.tick = 0;
+    game.lan.lastPacketTick = 0;
     game.lan.timeout = 0;
     game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
     game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
@@ -1201,7 +1202,7 @@ static void handlePlayerInput(TankType type) {
     handleCommand(&game.tanks[type], cmd);
 }
 
-static void handleClientInput(TankType type) {
+static Command handleClientInput(TankType type) {
     Command cmd = {};
     if (game.lan.clientInput[0]) {
         cmd.move = true;
@@ -1220,6 +1221,7 @@ static void handleClientInput(TankType type) {
         cmd.fire = true;
     }
     handleCommand(&game.tanks[type], cmd);
+    return cmd;
 }
 
 static void setScreen(GameScreen s) {
@@ -2131,7 +2133,19 @@ static void gameLogic() {
     updateGameState();
 }
 
-static void lanGameClient() {
+static int lanGameClient() {
+    game.lan.inputNumber++;
+
+    int frameTime = game.frameTime;
+
+    int iLast = (game.lan.clientCommandIndexLast + 1) % MAX_CLIENT_COMMANDS;
+    game.lan.clientCommandIndexLast = iLast;
+
+    game.lan.clientCommands[iLast] = (ClientCommand){
+        handleClientInput(TPlayer2), game.lan.inputNumber, frameTime};
+
+    int lastNumber = 0;
+
     struct sockaddr_in recvAddress;
 
     char buffer[MAX_PACKET_SIZE + 1];
@@ -2162,12 +2176,15 @@ static void lanGameClient() {
         if (ZSTD_isError(decompressedSize)) {
             fprintf(stderr, "ZSTD decompression failed: %s\n",
                     ZSTD_getErrorName(decompressedSize));
-            return;
+            break;
         }
 
         GameStatePacket packet = unpackGameState(&game, decompressed);
 
-        if (packet.tick != game.tick) continue;
+        if (packet.tick != game.lan.lastPacketTick) continue;
+
+        if (packet.inputNumber > lastNumber) lastNumber = packet.inputNumber;
+
         updatePlayerLifesUI();
         if (game.screen != packet.screen) {
             setScreen(packet.screen);
@@ -2185,6 +2202,7 @@ static void lanGameClient() {
     if (IsKeyDown(controls[0].down)) game.lan.clientInput[3] = 1;
     if (IsKeyPressed(controls[0].fire)) game.lan.clientInput[4] = 1;
     if (IsKeyPressed(KEY_ENTER)) game.lan.clientInput[5] = 1;
+    game.lan.clientInput[6] = game.lan.inputNumber;
 
     ssize_t sent = sendto(
         game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
@@ -2197,11 +2215,38 @@ static void lanGameClient() {
         if (game.sfxPlayed[i] == SFX_MAX) break;
         playSound(game.sounds.sfx[game.sfxPlayed[i]]);
     }
+
+    // client side prediction
+    if (game.gameOverTime > 0) return frameTime;
+
+    int iFirst = game.lan.clientCommandIndexFirst;
+
+    while (true) {
+        if (game.lan.clientCommands[iFirst].number < lastNumber &&
+            (iFirst < iLast || iFirst == MAX_CLIENT_COMMANDS - 1))
+
+            iFirst = (iFirst + 1) % MAX_CLIENT_COMMANDS;
+        else
+            break;
+    }
+
+    game.lan.clientCommandIndexFirst = iFirst;
+
+    int i = iFirst;
+
+    while (i < (game.lan.clientCommandIndexLast)) {
+        if (game.lan.clientCommands[i].number >= lastNumber) {
+            game.frameTime = game.lan.clientCommands[i].dt;
+            handleCommand(&game.tanks[TPlayer2],
+                          game.lan.clientCommands[i].command);
+        }
+        i = (i + 1) % MAX_CLIENT_COMMANDS;
+    }
+
+    return frameTime;
 }
 
 static void lanGameServerSend() {
-    game.tick++;
-
     char rawBuffer[MAX_PACKET_SIZE];
     size_t rawSize = packGameState(&game, rawBuffer);
 
@@ -2250,6 +2295,7 @@ static void lanGameServerRecieve() {
 
         if (game.lan.clientInput[4]) fire = true;  // prevents loss of data
         if (game.lan.clientInput[5]) enter = true;
+        game.lan.inputNumber = game.lan.clientInput[6];
     }
 
     game.lan.clientInput[4] = fire;
@@ -2264,7 +2310,7 @@ static void lanGameLogic() {
     if (game.lan.lanMode == LServer) {
         lanGameServerRecieve();
     } else {
-        lanGameClient();
+        game.frameTime = lanGameClient();
         return;
     }
 
@@ -2357,6 +2403,7 @@ int main(void) {
 
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
+        game.tick += game.frameTime;
 
         if (IsKeyPressed(KEY_F)) {
             if (game.fullscreen) {

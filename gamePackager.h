@@ -51,7 +51,8 @@ typedef struct {
 } GameStateScorePopup;
 
 typedef struct {
-    long tick;
+    float tick;
+    int inputNumber;
     GameStateTank tanks[MAX_TANK_COUNT];
     GameStateBullet bullets[MAX_BULLET_COUNT];
     GameStateCell field[FIELD_ROWS][FIELD_COLS];
@@ -133,6 +134,7 @@ static size_t packGameState(Game* game, char* buffer) {
     memset(&packet, 0, sizeof(packet));
 
     packet.tick = game->tick;
+    packet.inputNumber = game->lan.inputNumber;
 
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         packTank(&game->tanks[i], &packet.tanks[i]);
@@ -239,9 +241,9 @@ static GameStatePacket unpackGameState(Game* game, char* buffer) {
     GameStatePacket packet;
     memcpy(&packet, buffer, sizeof(packet));
 
-    if (packet.tick <= game->tick) return packet;
+    if (packet.tick <= game->lan.lastPacketTick) return packet;
 
-    game->tick = packet.tick;
+    game->lan.lastPacketTick = packet.tick;
 
     for (int i = 0; i < MAX_TANK_COUNT; i++) {
         unpackTank(&game->tanks[i], &packet.tanks[i]);

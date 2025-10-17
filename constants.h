@@ -81,10 +81,11 @@ const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
 #define PORT 5000
 #define BROADCAST_IP "255.255.255.255"
 #define BUFFER_SIZE 256
-#define CLIENT_INPUT_SIZE 6
+#define CLIENT_INPUT_SIZE 7 * sizeof(int)
 
 const int MAX_AVAILABLE_GAMES = 4;
 const float TIMEOUT = 3.0;
 const float TIMEOUT_SCREEN_TIME = 3.0;
+const int MAX_CLIENT_COMMANDS = 256;
 
 #endif
