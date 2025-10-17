@@ -218,6 +218,7 @@ typedef struct {
     Texture2D gameOverCurtain;
     Texture2D pause;
     Texture2D scores;
+    Texture2D lan;
 } Textures;
 
 typedef enum {
@@ -294,6 +295,8 @@ typedef struct {
     int selectedAddressIndex;
     struct sockaddr_in joinableAddresses[MAX_AVAILABLE_GAMES];
     char clientInput[CLIENT_INPUT_SIZE];
+    float timeout;
+    float timeoutScreenTime;
 } Lan;
 
 typedef enum {
@@ -307,6 +310,7 @@ typedef enum {
     GSScoreLan,
     GSGameOver,
     GSCongrats,
+    GSTimedOut,
 } GameScreen;
 
 typedef struct {
@@ -315,6 +319,9 @@ typedef struct {
 } GameFunctions;
 
 typedef struct {
+    int screenWidth;
+    int screenHeight;
+    Camera2D camera;
     Cell field[FIELD_ROWS][FIELD_COLS];
     Tank tanks[MAX_TANK_COUNT];
     TankSpec tankSpecs[TMax];
@@ -361,6 +368,8 @@ typedef struct {
     Font font;
     bool proceed;
     bool mute;
+    bool fullscreen;
+    long tick;
 } Game;
 
 #endif

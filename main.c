@@ -1,6 +1,10 @@
 #include <assert.h>
+#include <libgen.h>
+#include <limits.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
+#include <zstd.h>
 
 #include "constants.h"
 #include "dataTypes.h"
@@ -41,6 +45,8 @@ static void drawHostGame();
 static void initJoinGame();
 static void joinGameLogic();
 static void drawJoinGame();
+static void timedOutLogic();
+static void drawTimedOut();
 
 static GameFunctions gameFunctions[] = {
     {.logic = titleLogic, .draw = drawTitle},
@@ -53,6 +59,7 @@ static GameFunctions gameFunctions[] = {
     {.logic = lanStageSummaryLogic, .draw = drawStageSummary},
     {.logic = gameOverCurtainLogic, .draw = drawGameOverCurtain},
     {.logic = congratsLogic, .draw = drawCongrats},
+    {.logic = timedOutLogic, .draw = drawTimedOut},
 };
 
 static Game game;
@@ -317,6 +324,15 @@ static void drawPause() {
                    WHITE);
 }
 
+static void updateCamera() {
+    game.camera.target = (Vector2){0, 0};
+    game.camera.zoom = MIN((float)game.screenHeight / SCREEN_HEIGHT,
+                           (float)game.screenWidth / SCREEN_WIDTH);
+    game.camera.offset =
+        (Vector2){(game.screenWidth - SCREEN_WIDTH * game.camera.zoom) / 2,
+                  (game.screenHeight - SCREEN_HEIGHT * game.camera.zoom) / 2};
+}
+
 static void drawGame() {
     drawField();
     drawBullets();
@@ -442,6 +458,7 @@ static void loadTextures() {
         LoadTexture("textures/" ASSETDIR "/big_explosion_4.png");
     game.textures.bigExplosions[4] =
         LoadTexture("textures/" ASSETDIR "/big_explosion_5.png");
+    game.textures.lan = LoadTexture("textures/" ASSETDIR "/lan.png");
 }
 
 static void loadStage(int stage) {
@@ -704,6 +721,8 @@ static void loadHiScore() {
 static void initGameRun() {
     saveHiScore();
     game.isFlagDead = false;
+    game.tick = 0;
+    game.lan.timeout = 0;
     game.tanks[TPlayer1] = (Tank){.type = TPlayer1, .lifes = 2};
     game.tanks[TPlayer2] = (Tank){.type = TPlayer2, .lifes = 2};
     game.tankSpecs[TPlayer1] = (TankSpec){.texture = &game.textures.player1Tank,
@@ -724,7 +743,7 @@ static void initGame() {
     loadHiScore();
     loadTextures();
     loadSounds();
-    game.font = LoadFontEx("fonts/LiberationMono.ttf", 40, NULL, 0);
+    game.font = LoadFontEx("fonts/7x7.ttf", 56, NULL, 0);
     game.explosionAnimations[ETBullet] =
         (Animation){.duration = BULLET_EXPLOSION_TTL,
                     .textureCount = ASIZE(game.textures.bulletExplosions),
@@ -1522,6 +1541,7 @@ static void updateGameState() {
 static void gameOverCurtainLogic() {
     if (game.proceed) {
         setScreen(GSTitle);
+        close(game.lan.socket);
     }
 }
 
@@ -1780,6 +1800,7 @@ static void lanMenuLogic() {
 }
 
 static void drawLanMenu() {
+#ifndef ALT_ASSETS
     static const int N = 256;
     char text[N];
     snprintf(text, N, "LAN MODE:");
@@ -1797,10 +1818,32 @@ static void drawLanMenu() {
     snprintf(text, N, "BACK");
     drawText(text, centerX(measureText(text, FONT_SIZE)), 650, FONT_SIZE,
              game.lanMenu.lanMenuSelectedItem == LMBack ? RED : WHITE);
+#else
+    int topY = 150;
+    Texture2D *tex = &game.textures.lan;
+    int titleTexHeight = tex->height;
+    int x = (SCREEN_WIDTH - tex->width * 2) / 2;
+    int y = topY;
+    DrawTexturePro(*tex, (Rectangle){0, 0, tex->width, titleTexHeight},
+                   (Rectangle){x, y, tex->width * 2, titleTexHeight * 2},
+                   (Vector2){}, 0, WHITE);
+    if (game.lanMenu.lanMenuSelectedItem != LMNone) {
+        tex = &game.textures.player1Tank;
+        int texX =
+            (3 * 2 + ((long)(game.totalTime * 16) % 2)) * TANK_TEXTURE_SIZE;
+        DrawTexturePro(
+            *tex, (Rectangle){texX, 0, TANK_TEXTURE_SIZE, TANK_TEXTURE_SIZE},
+            (Rectangle){x + 150,
+                        topY + titleTexHeight * 2 - 174 +
+                            (game.lanMenu.lanMenuSelectedItem - 1) * 60,
+                        TANK_TEXTURE_SIZE * 4, TANK_TEXTURE_SIZE * 4},
+            (Vector2){}, 0, WHITE);
+    }
+#endif
 }
 
 static void initHostGame() {
-    game.lan.addressLength = sizeof(game.lan.clientAddress);
+    game.lan.addressLength = sizeof(struct sockaddr_in);
 
     if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Socket failed");
@@ -1829,6 +1872,12 @@ static void initHostGame() {
 }
 
 static void hostGameLogic() {
+    if (game.proceed) {
+        close(game.lan.socket);
+        setScreen(GSLan);
+        return;
+    }
+
     char buffer[BUFFER_SIZE];
 
     // checks all new packets in order.
@@ -1863,17 +1912,17 @@ static void hostGameLogic() {
             initStage(1);
         }
     }
-    // setScreen(GSPlay);
-    // initGameRun();
-    // initStage(1);
 }
 
 static void drawHostGame() {
     static const int N = 256;
     char text[N];
-    snprintf(text, N, "Waiting for player...");
+    snprintf(text, N, "WAITING FOR PLAYER...");
     drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
-             SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, WHITE);
+             SCREEN_HEIGHT / 2 - 50, FONT_SIZE * 1.5, WHITE);
+    snprintf(text, N, "PRESS ENTER TO GO BACK");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1)),
+             SCREEN_HEIGHT / 2 + 50, FONT_SIZE * 1, RED);
 }
 
 static void discoverGames() {
@@ -1890,7 +1939,7 @@ static void discoverGames() {
 }
 
 static void initJoinGame() {
-    game.lan.addressLength = sizeof(game.lan.clientAddress);
+    game.lan.addressLength = sizeof(struct sockaddr_in);
     if ((game.lan.socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("Socket failed");
         exit(1);
@@ -1987,7 +2036,7 @@ static void drawJoinGame() {
 
     for (int i = 0; i < game.lan.availableGames; i++) {
         y += 80;
-        snprintf(text, N, "Game: %s",
+        snprintf(text, N, "GAME: %s",
                  inet_ntoa(game.lan.joinableAddresses[i].sin_addr));
         drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
                  game.lan.selectedAddressIndex == i ? RED : WHITE);
@@ -1997,6 +2046,28 @@ static void drawJoinGame() {
     snprintf(text, N, "BACK");
     drawText(text, centerX(measureText(text, FONT_SIZE)), y, FONT_SIZE,
              game.lan.selectedAddressIndex == -2 ? RED : WHITE);
+}
+
+static void checkTimeout() {
+    game.lan.timeout += game.frameTime;
+    if (game.lan.timeout > TIMEOUT) {
+        close(game.lan.socket);
+        printf("Connection timed out!");
+        setScreen(GSTimedOut);
+    }
+}
+
+static void timedOutLogic() {
+    game.lan.timeoutScreenTime += game.frameTime;
+    if (game.lan.timeoutScreenTime > TIMEOUT_SCREEN_TIME) setScreen(GSTitle);
+}
+
+static void drawTimedOut() {
+    static const int N = 64;
+    char text[N];
+    snprintf(text, N, "CONNECTION TIMED OUT!");
+    drawText(text, centerX(measureText(text, FONT_SIZE * 1.5)),
+             SCREEN_HEIGHT / 2, FONT_SIZE * 1.5, RED);
 }
 
 static void gameLogic() {
@@ -2061,18 +2132,42 @@ static void gameLogic() {
 }
 
 static void lanGameClient() {
+    struct sockaddr_in recvAddress;
+
     char buffer[MAX_PACKET_SIZE + 1];
     while (true) {
-        int n = recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
-                         (struct sockaddr *)&game.lan.serverAddress,
-                         &game.lan.addressLength);
+        int n =
+            recvfrom(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+                     (struct sockaddr *)&recvAddress, &game.lan.addressLength);
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             perror("recvfrom");
             break;
         }
+
+        if (recvAddress.sin_addr.s_addr !=
+                game.lan.serverAddress.sin_addr.s_addr ||
+            recvAddress.sin_port != game.lan.serverAddress.sin_port) {
+            continue;
+        }
+
+        game.lan.timeout = 0;
+
         buffer[n] = '\0';
-        GameStatePacket packet = unpackGameState(&game, buffer);
+
+        char decompressed[MAX_PACKET_SIZE];
+        size_t decompressedSize =
+            ZSTD_decompress(decompressed, sizeof(decompressed), buffer, n);
+
+        if (ZSTD_isError(decompressedSize)) {
+            fprintf(stderr, "ZSTD decompression failed: %s\n",
+                    ZSTD_getErrorName(decompressedSize));
+            return;
+        }
+
+        GameStatePacket packet = unpackGameState(&game, decompressed);
+
+        if (packet.tick != game.tick) continue;
         updatePlayerLifesUI();
         if (game.screen != packet.screen) {
             setScreen(packet.screen);
@@ -2091,8 +2186,12 @@ static void lanGameClient() {
     if (IsKeyPressed(controls[0].fire)) game.lan.clientInput[4] = 1;
     if (IsKeyPressed(KEY_ENTER)) game.lan.clientInput[5] = 1;
 
-    sendto(game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
-           (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
+    ssize_t sent = sendto(
+        game.lan.socket, game.lan.clientInput, CLIENT_INPUT_SIZE, 0,
+        (struct sockaddr *)&game.lan.serverAddress, game.lan.addressLength);
+    if (sent < 0) {
+        perror("sendto");
+    }
 
     for (int i = 0; i < MAX_SFX_PLAYED; i++) {
         if (game.sfxPlayed[i] == SFX_MAX) break;
@@ -2101,10 +2200,23 @@ static void lanGameClient() {
 }
 
 static void lanGameServerSend() {
-    char buffer[MAX_PACKET_SIZE];
-    packGameState(&game, buffer);
+    game.tick++;
 
-    sendto(game.lan.socket, buffer, MAX_PACKET_SIZE, 0,
+    char rawBuffer[MAX_PACKET_SIZE];
+    size_t rawSize = packGameState(&game, rawBuffer);
+
+    char compressedBuffer[MAX_PACKET_SIZE];
+
+    size_t compressedSize = ZSTD_compress(
+        compressedBuffer, sizeof(compressedBuffer), rawBuffer, rawSize, 7);
+
+    if (ZSTD_isError(compressedSize)) {
+        fprintf(stderr, "ZSTD compression failed: %s\n",
+                ZSTD_getErrorName(compressedSize));
+        return;
+    }
+
+    sendto(game.lan.socket, compressedBuffer, compressedSize, 0,
            (struct sockaddr *)&game.lan.clientAddress, game.lan.addressLength);
 }
 
@@ -2112,18 +2224,30 @@ static void lanGameServerRecieve() {
     bool fire = false;
     bool enter = false;
 
+    struct sockaddr_in recvAddress;
+
     char buffer[BUFFER_SIZE];
     while (true) {
-        int n = recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
-                         (struct sockaddr *)&game.lan.clientAddress,
-                         &game.lan.addressLength);
+        int n =
+            recvfrom(game.lan.socket, buffer, BUFFER_SIZE - 1, 0,
+                     (struct sockaddr *)&recvAddress, &game.lan.addressLength);
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             perror("recvfrom");
             break;
         }
-        buffer[n] = '\0';
-        memcpy(game.lan.clientInput, buffer, CLIENT_INPUT_SIZE);
+
+        if (recvAddress.sin_addr.s_addr !=
+                game.lan.clientAddress.sin_addr.s_addr ||
+            recvAddress.sin_port != game.lan.clientAddress.sin_port) {
+            continue;
+        }
+
+        game.lan.timeout = 0;
+
+        if (n > CLIENT_INPUT_SIZE) n = CLIENT_INPUT_SIZE;
+        memcpy(game.lan.clientInput, buffer, n);
+
         if (game.lan.clientInput[4]) fire = true;  // prevents loss of data
         if (game.lan.clientInput[5]) enter = true;
     }
@@ -2135,6 +2259,8 @@ static void lanGameServerRecieve() {
 }
 
 static void lanGameLogic() {
+    checkTimeout();
+
     if (game.lan.lanMode == LServer) {
         lanGameServerRecieve();
     } else {
@@ -2192,7 +2318,9 @@ static void playMusic() {
     }
     if (IsSoundPlaying(currentSoundtrack) || IsSoundPlaying(dieSoundtrack))
         return;
-    char track = game.screen == GSPlay ? (game.stage - 1) % 4 + 1 : 0;
+    char track = (game.screen == GSPlay || game.screen == GSPlayLan)
+                     ? (game.stage - 1) % 4 + 1
+                     : 0;
     if (game.soundtrack != track) {
         game.soundtrackPhase = 0;
     } else {
@@ -2205,18 +2333,20 @@ static void playMusic() {
 #endif
 
 int main(void) {
+    char exePath[PATH_MAX];
+    uint32_t size = sizeof(exePath);
+    if (_NSGetExecutablePath(exePath, &size) == 0) {
+        chdir(
+            dirname(exePath));  // set working directory to executable location
+    }
+
     srand(time(0));
 
     SetTraceLogLevel(LOG_NONE);
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Battle City 4000");
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    InitWindow(1, 1, "Battle City 4000");
+    MaximizeWindow();
     SetTargetFPS(60);
-
-    RenderTexture2D renderTexture =
-        LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-
-    int display = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(display) / 1, GetMonitorHeight(display) / 1);
-    ToggleFullscreen();
 
     InitAudioDevice();
 
@@ -2227,6 +2357,27 @@ int main(void) {
 
     while (!WindowShouldClose()) {
         game.totalTime = GetTime();
+
+        if (IsKeyPressed(KEY_F)) {
+            if (game.fullscreen) {
+                game.fullscreen = false;
+                ToggleFullscreen();
+                SetWindowSize(0, 0);
+                MaximizeWindow();
+            } else {
+                game.fullscreen = true;
+                ToggleFullscreen();
+            }
+        }
+
+        if (!game.fullscreen) {
+            game.screenWidth = GetScreenWidth();
+            game.screenHeight = GetScreenHeight();
+        } else {
+            int display = GetCurrentMonitor();
+            game.screenWidth = GetMonitorWidth(display);
+            game.screenHeight = GetMonitorHeight(display);
+        }
 
         game.proceed = false;
         if (IsKeyPressed(KEY_ENTER)) game.proceed = true;
@@ -2239,17 +2390,15 @@ int main(void) {
 
         game.logic();
 
-        BeginTextureMode(renderTexture);
         ClearBackground(BLACK);
-        game.draw();
-        EndTextureMode();
+
         BeginDrawing();
-        int sh = GetScreenHeight();
-        int sw = sh * ((float)SCREEN_WIDTH / SCREEN_HEIGHT);
-        DrawTexturePro(renderTexture.texture,
-                       (Rectangle){0, 0, SCREEN_WIDTH, -SCREEN_HEIGHT},
-                       (Rectangle){(GetScreenWidth() - sw) / 2, 0, sw, sh},
-                       (Vector2){0, 0}, 0, WHITE);
+
+        updateCamera();
+        BeginMode2D(game.camera);
+        game.draw();
+        EndMode2D();
+
         EndDrawing();
         game.frameTime = GetFrameTime();
 #ifdef ALT_ASSETS

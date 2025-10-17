@@ -6,7 +6,7 @@
 const int MAX_SFX_PLAYED = 4;
 const int LEVEL_COUNT = 35;
 const float SLIDING_TIME = 0.6;
-const int FONT_SIZE = 40;
+const int FONT_SIZE = 28;
 const float TITLE_SLIDE_TIME = 1;
 const float IMMOBILE_TIME = 5;
 const float GAME_OVER_SLIDE_TIME = 1;
@@ -50,7 +50,7 @@ const int MAX_SCORE_POPUP_COUNT = MAX_BULLET_COUNT;
 const Vector2 SCORE_POPUP_TEXTURE_SIZE = (Vector2){16, 9};
 const Vector2 SCORE_POPUP_SIZE = (Vector2){16 * 4, 9 * 4};
 const float SCORE_POPUP_TTL = 0.5;
-const short BULLET_SPEEDS[3] = {450, 550, 600};
+const short BULLET_SPEEDS[3] = {450, 700, 800};
 const int BULLET_SIZE = 16;
 const float BULLET_EXPLOSION_TTL = 0.2f;
 const float BIG_EXPLOSION_TTL = 0.4f;
@@ -84,5 +84,7 @@ const Vector2 POWERUP_POSITIONS[POWERUP_POSITIONS_COUNT] = {
 #define CLIENT_INPUT_SIZE 6
 
 const int MAX_AVAILABLE_GAMES = 4;
+const float TIMEOUT = 3.0;
+const float TIMEOUT_SCREEN_TIME = 3.0;
 
 #endif
