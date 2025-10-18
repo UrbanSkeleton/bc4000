@@ -1734,6 +1734,7 @@ static void titleLogic() {
         }
         game.title = (Title){0};
         if (game.mode == GMLan) {
+            game.lanMenu.lanMenuSelectedItem = LMHostGame;
             setScreen(GSLan);
         } else {
             setScreen(GSPlay);
